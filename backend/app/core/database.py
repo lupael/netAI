@@ -1,7 +1,7 @@
 """In-memory data store with realistic sample data."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import random
 
@@ -28,7 +28,7 @@ from app.core.models import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-_NOW = datetime.utcnow()
+_NOW = datetime.now(timezone.utc)
 
 
 def _dt(hours_ago: float = 0, days_ago: float = 0) -> datetime:

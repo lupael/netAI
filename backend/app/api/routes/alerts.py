@@ -1,7 +1,7 @@
 """Alerts routes."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Body, HTTPException
 
@@ -47,7 +47,7 @@ async def acknowledge_alert(
                 update={
                     "acknowledged": True,
                     "acknowledged_by": acknowledged_by,
-                    "acknowledged_at": datetime.utcnow(),
+                    "acknowledged_at": datetime.now(timezone.utc),
                 }
             )
             return db.alerts_db[i]

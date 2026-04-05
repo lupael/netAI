@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core import database as db
@@ -47,7 +47,7 @@ def schedule_upgrade(request: ScheduleUpgradeRequest) -> SoftwareUpdate:
         current_version=current_version,
         target_version=request.target_version,
         status=UpdateStatus.SCHEDULED,
-        scheduled_at=request.scheduled_at or datetime.utcnow(),
+        scheduled_at=request.scheduled_at or datetime.now(timezone.utc),
         rollback_version=current_version,
     )
     db.software_updates_db.append(update)
@@ -60,7 +60,7 @@ def execute_update(update_id: str) -> Optional[SoftwareUpdate]:
             db.software_updates_db[i] = update.model_copy(
                 update={
                     "status": UpdateStatus.COMPLETED,
-                    "completed_at": datetime.utcnow(),
+                    "completed_at": datetime.now(timezone.utc),
                 }
             )
             # Update firmware version on the device record

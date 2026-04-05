@@ -5,7 +5,7 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -66,7 +66,7 @@ async def _telemetry_broadcaster() -> None:
             sample_device = random.choice(db.devices_db)
             payload = {
                 "event": "telemetry",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "device_id": sample_device.id,
                 "device_name": sample_device.name,
                 "cpu_usage": round(
@@ -149,7 +149,7 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             # Echo back with a timestamp so clients can confirm connectivity
             await websocket.send_text(
-                json.dumps({"event": "pong", "echo": data, "timestamp": datetime.utcnow().isoformat()})
+                json.dumps({"event": "pong", "echo": data, "timestamp": datetime.now(timezone.utc).isoformat()})
             )
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -164,7 +164,7 @@ async def health_check():
     from app.core import database as db
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "devices": len(db.devices_db),
         "active_threats": sum(1 for t in db.threats_db if t.status.value in ("active", "investigating")),
         "unacked_alerts": sum(1 for a in db.alerts_db if not a.acknowledged),

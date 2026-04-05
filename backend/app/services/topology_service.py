@@ -1,7 +1,7 @@
 """Topology service."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from app.core import database as db
@@ -12,7 +12,7 @@ def get_topology() -> Topology:
     return Topology(
         devices=db.devices_db,
         links=db.links_db,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 
@@ -29,6 +29,6 @@ def discover_topology() -> DiscoveryResult:
     return DiscoveryResult(
         discovered=len(db.devices_db),
         updated=2,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         new_devices=[],
     )

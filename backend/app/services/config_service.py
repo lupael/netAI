@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core import database as db
@@ -66,7 +66,7 @@ def apply_config_change(
         old_config=old_config,
         new_config=new_config,
         status=ConfigChangeStatus.APPLIED,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         author=author,
         comment=comment,
         compliance=True,
@@ -88,7 +88,7 @@ def rollback_config(device_id: str, change_id: str) -> Optional[ConfigChange]:
         old_config=db.configs_db.get(device_id, ""),
         new_config=target.old_config,
         status=ConfigChangeStatus.APPLIED,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         author="rollback-system",
         comment=f"Rollback of change {change_id}",
         compliance=True,

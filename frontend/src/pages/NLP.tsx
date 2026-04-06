@@ -80,11 +80,11 @@ const NLP: React.FC = () => {
     setTimeout(scrollToBottom, 50)
 
     try {
-      const res = await client.post<NLPResponse>('/api/v1/nlp/query', { query })
+      const res = await client.post<NLPResponse>('/api/nlp/query', { query })
       const aiMsg: ChatMessage = {
         id: `a-${Date.now()}`,
         role: 'assistant',
-        content: res.data.answer,
+        content: res.data.response,
         timestamp: new Date().toISOString(),
         actions: res.data.actions,
       }

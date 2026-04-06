@@ -190,9 +190,12 @@ class Alert(BaseModel):
     type: AlertType
     severity: ThreatSeverity
     device_id: str
+    device_name: Optional[str] = None
+    title: str = ""
     message: str
     timestamp: datetime
     acknowledged: bool
+    resolved: bool = False
     acknowledged_by: Optional[str] = None
     acknowledged_at: Optional[datetime] = None
 

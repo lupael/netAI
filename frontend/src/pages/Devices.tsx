@@ -39,8 +39,34 @@ const Devices: React.FC = () => {
   const fetchDevices = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Device[]>('/api/v1/devices')
-      if (res.data.length) { setDevices(res.data); setSelected(res.data[0]) }
+      const res = await client.get<Record<string, unknown>[]>('/api/devices')
+      if (res.data.length) {
+        // Map backend Device fields (name, ip, type, firmware_version) to UI Device fields
+        const mapped: Device[] = res.data.map((d) => ({
+          id: d.id as string,
+          hostname: (d.name as string) ?? (d.hostname as string),
+          ip_address: (d.ip as string) ?? (d.ip_address as string),
+          device_type: (d.type as string) ?? (d.device_type as string),
+          vendor: (d.vendor as string) ?? 'Unknown',
+          model: (d.model as string) ?? '',
+          os_version: (d.firmware_version as string) ?? (d.os_version as string) ?? '',
+          location: (d.location as string) ?? '',
+          status: (d.status === 'online' ? 'healthy' : d.status === 'offline' ? 'down' : d.status) as Device['status'],
+          last_seen: (d.last_seen as string) ?? new Date().toISOString(),
+          interfaces: [],
+          metrics: {
+            cpu_usage: (d.cpu_usage as number) ?? 0,
+            memory_usage: (d.memory_usage as number) ?? 0,
+            disk_usage: (d.disk_usage as number) ?? 0,
+            uptime_seconds: (d.uptime as number) ?? 0,
+            packet_loss_pct: 0,
+            latency_ms: 0,
+            timestamp: new Date().toISOString(),
+          },
+        }))
+        setDevices(mapped)
+        setSelected(mapped[0])
+      }
     } catch {
       // use mock
     } finally {

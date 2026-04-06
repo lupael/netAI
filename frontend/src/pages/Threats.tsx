@@ -37,8 +37,14 @@ const Threats: React.FC = () => {
   const fetchThreats = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Threat[]>('/api/v1/threats')
-      setThreats(res.data)
+      const res = await client.get<Threat[]>('/api/threats')
+      // Backend ThreatAlert uses target_ip / timestamp / status enum values
+      const mapped = res.data.map((t) => ({
+        ...t,
+        destination_ip: (t as unknown as Record<string, string>).target_ip ?? t.destination_ip,
+        detected_at: (t as unknown as Record<string, string>).timestamp ?? t.detected_at,
+      }))
+      setThreats(mapped)
     } catch {
       // use mock
     } finally {
@@ -51,7 +57,7 @@ const Threats: React.FC = () => {
   const handleMitigate = async (id: string) => {
     setMitigating(id)
     try {
-      await client.post(`/api/v1/threats/${id}/mitigate`)
+      await client.post(`/api/threats/${id}/mitigate`)
       setThreats((prev) => prev.map((t) => t.id === id ? { ...t, status: 'mitigated' } : t))
     } catch {
       setThreats((prev) => prev.map((t) => t.id === id ? { ...t, status: 'mitigated' } : t))

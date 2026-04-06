@@ -10,6 +10,15 @@
 
 **netAI** is a full-stack AI-driven network management platform that acts as a senior network administrator. It continuously monitors your network infrastructure, detects threats and misconfigurations, predicts device failures, and provides a natural language interface for administrative tasks.
 
+It supports **8 network device vendors** out of the box — from Cisco and Juniper to MikroTik, Nokia, Ubuntu/Linux, BDcom, VSOL, and DBC — with a plugin architecture for adding new vendors.
+
+---
+
+## Screenshots
+
+### Dashboard
+![netAI Dashboard](https://github.com/user-attachments/assets/a7a80983-dfa0-4b7d-8f13-cf30dbeb2e56)
+
 ---
 
 ## Architecture
@@ -18,8 +27,8 @@
 netAI/
 ├── backend/          # Python / FastAPI REST API + WebSocket
 │   └── app/
-│       ├── api/routes/   # Endpoint modules (topology, threats, config, devices, software, alerts, nlp)
-│       ├── core/         # Pydantic models, in-memory datastore, ML anomaly detector
+│       ├── api/routes/   # Endpoints (topology, threats, config, devices, software, alerts, nlp, vendors)
+│       ├── core/         # Pydantic models, in-memory datastore, ML anomaly detector, vendor adapters
 │       └── services/     # Business logic services
 ├── frontend/         # React 18 / TypeScript / Vite dashboard
 │   └── src/
@@ -27,6 +36,9 @@ netAI/
 │       ├── components/   # Sidebar, Header, MetricCard, StatusBadge, LoadingSpinner
 │       ├── api/          # Axios client
 │       └── types/        # TypeScript interfaces
+├── docs/
+│   ├── developer-guide.md   # Developer documentation
+│   └── user-guide.md        # End-user documentation
 ├── docker-compose.yml
 └── .github/workflows/ci.yml
 ```
@@ -44,6 +56,8 @@ netAI/
 | **Software Lifecycle** | Firmware inventory, upgrade scheduling | `GET /api/software/inventory`, `POST /api/software/upgrade` |
 | **Alerts Center** | Unified alert management with severity levels | `GET /api/alerts`, `POST /api/alerts/{id}/acknowledge` |
 | **AI Assistant** | Natural language interface for admin commands | `POST /api/nlp/query` |
+| **Vendor Management** | Multi-vendor profiles & capability registry | `GET /api/vendors`, `GET /api/vendors/{key}/capabilities` |
+| **Dashboard KPI** | Aggregated health summary for dashboard | `GET /api/dashboard/kpi` |
 | **WebSocket** | Real-time telemetry streaming | `ws://host/ws` |
 
 ---
@@ -117,6 +131,38 @@ npm run dev   # http://localhost:3000
 
 ---
 
+## Supported Vendors
+
+netAI supports **8 network device vendors** out of the box:
+
+| Vendor | OS Family | Device Examples | Protocols |
+|--------|-----------|----------------|-----------|
+| **Cisco** | IOS / IOS-XE / IOS-XR | ASR, ISR, Catalyst, Nexus | SNMP, SSH, NETCONF, RESTCONF |
+| **MikroTik** | RouterOS | CCR2004, CRS, RB series | RouterOS API, SSH, SNMP, Winbox |
+| **Juniper** | JunOS | MX, EX, QFX, SRX | NETCONF, RESTCONF, SSH, SNMP |
+| **Nokia** | SR OS | 7750 SR-1, 7210 SAS | NETCONF, gRPC/gNMI, SNMP, SSH |
+| **Ubuntu / Linux** | Linux | Servers, VMs, virtual appliances | SNMP, SSH, Prometheus, REST |
+| **BDcom** | BDcom OS | S3900, GP series, OLTs | SNMP, SSH, CLI, Telnet |
+| **VSOL** | VSOL OS | V1600, V2800, OLTs/ONUs | SNMP, SSH, CLI, TR-069 |
+| **DBC** | DBC OS (Huawei VRP) | Switches, routers | NETCONF, SNMP, SSH, CLI |
+
+### Vendor Discovery Flow
+
+```
+1. Scan subnet for SNMP / SSH / HTTP endpoints
+2. Query SNMP sysDescr (OID 1.3.6.1.2.1.1.1.0)
+3. Identify vendor via keyword fingerprinting
+4. Load VendorProfile (CLI commands, protocols)
+5. Pull config & health using vendor-specific commands
+6. Normalise into unified Device schema
+7. Store in datastore + add to topology graph
+8. Begin monitoring and threat detection
+```
+
+See `GET /api/vendors` for the full list and `GET /api/vendors/{vendor_key}/capabilities` for per-vendor capability matrix.
+
+---
+
 ## Technology Stack
 
 | Layer | Technology |
@@ -151,11 +197,21 @@ The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and 
 
 ## Security
 
-- CORS configured for trusted origins
+- CORS configured with `allow_credentials=False` (wildcard origins safe without credentials)
 - RBAC-ready API structure
 - Immutable audit log for all configuration changes
 - TLS-ready (configure in nginx.conf for production)
 - No hardcoded secrets — environment variable driven
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Developer Guide](docs/developer-guide.md) | Architecture, API reference, extending the system, adding vendors |
+| [User Guide](docs/user-guide.md) | Feature walkthrough, vendor-specific notes, troubleshooting |
+| [API Docs](http://localhost:8000/docs) | Interactive Swagger UI (when backend is running) |
 
 ---
 

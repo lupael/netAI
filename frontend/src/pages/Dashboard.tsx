@@ -54,11 +54,16 @@ const Dashboard: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       const [kpiRes, alertRes] = await Promise.allSettled([
-        client.get<DashboardKPI>('/api/v1/dashboard/kpi'),
-        client.get<Alert[]>('/api/v1/alerts?limit=5&resolved=false'),
+        client.get<DashboardKPI>('/api/dashboard/kpi'),
+        client.get<Alert[]>('/api/alerts'),
       ])
       if (kpiRes.status === 'fulfilled') setKpi(kpiRes.value.data)
-      if (alertRes.status === 'fulfilled') setAlerts(alertRes.value.data)
+      if (alertRes.status === 'fulfilled') {
+        const raw = alertRes.value.data
+        // Normalise: map device_name → device_hostname for display
+        const mapped = raw.map((a) => ({ ...a, device_hostname: a.device_name ?? a.device_hostname }))
+        setAlerts(mapped)
+      }
     } catch {
       // retain mock data
     } finally {

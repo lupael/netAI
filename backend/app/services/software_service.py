@@ -39,7 +39,9 @@ def get_pending_updates() -> List[SoftwareUpdate]:
 
 def schedule_upgrade(request: ScheduleUpgradeRequest) -> SoftwareUpdate:
     device = next((d for d in db.devices_db if d.id == request.device_id), None)
-    current_version = device.firmware_version if device else "unknown"
+    if device is None:
+        raise ValueError(f"Device '{request.device_id}' not found")
+    current_version = device.firmware_version
 
     update = SoftwareUpdate(
         id=f"sw-{uuid.uuid4().hex[:6]}",

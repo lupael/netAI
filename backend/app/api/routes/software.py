@@ -24,7 +24,10 @@ async def get_pending_updates():
 @router.post("/upgrade", response_model=SoftwareUpdate)
 async def schedule_upgrade(request: ScheduleUpgradeRequest):
     """Schedule a software/firmware upgrade for a device."""
-    return software_service.schedule_upgrade(request)
+    try:
+        return software_service.schedule_upgrade(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{update_id}/execute", response_model=SoftwareUpdate)

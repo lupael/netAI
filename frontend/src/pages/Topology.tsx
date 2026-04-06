@@ -92,8 +92,15 @@ const Topology: React.FC = () => {
   const fetchTopology = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Topology>('/api/v1/topology')
-      setTopology(res.data)
+      const res = await client.get<Topology>('/api/topology')
+      // Backend returns { devices, links, timestamp } — normalise to { nodes, links, last_updated }
+      const raw = res.data
+      const normalized: Topology = {
+        nodes: raw.devices ?? raw.nodes ?? [],
+        links: raw.links,
+        last_updated: raw.timestamp ?? raw.last_updated ?? new Date().toISOString(),
+      }
+      setTopology(normalized)
     } catch {
       // use mock
     } finally {
@@ -159,7 +166,7 @@ const Topology: React.FC = () => {
                 </defs>
 
                 {/* Links */}
-                {topology.links.map((link, i) => {
+                {(topology.nodes ?? []).length > 0 && topology.links.map((link, i) => {
                   const pos = getLink(link)
                   const color = LINK_STATUS_COLOR[link.status] ?? '#3b82f6'
                   const isDegraded = link.status !== 'active'
@@ -188,7 +195,7 @@ const Topology: React.FC = () => {
                 })}
 
                 {/* Nodes */}
-                {topology.nodes.map((node) => {
+                {(topology.nodes ?? []).map((node) => {
                   const p = nodePos(node.id)
                   const color = STATUS_COLOR[node.status] ?? '#9ca3af'
                   const isSelected = selected?.id === node.id
@@ -272,7 +279,7 @@ const Topology: React.FC = () => {
                 .filter((l) => l.source === selected.id || l.target === selected.id)
                 .map((l, i) => {
                   const peer = l.source === selected.id ? l.target : l.source
-                  const peerNode = topology.nodes.find((n) => n.id === peer)
+                  const peerNode = (topology.nodes ?? []).find((n) => n.id === peer)
                   return (
                     <div key={i} style={{ background: 'var(--bg-secondary)', borderRadius: 6, padding: '8px 10px', fontSize: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>

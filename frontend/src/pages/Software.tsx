@@ -37,8 +37,25 @@ const Software: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<SoftwareInfo[]>('/api/v1/software')
-      if (res.data.length) setSoftware(res.data)
+      const res = await client.get<Record<string, unknown>[]>('/api/software/inventory')
+      if (res.data.length) {
+        // Map backend inventory { device_id, device_name, current_version, vendor, model, pending_update } to SoftwareInfo
+        const mapped: SoftwareInfo[] = res.data.map((d) => {
+          const pending = d.pending_update as Record<string, unknown> | null
+          return {
+            device_id: d.device_id as string,
+            hostname: (d.device_name as string) ?? '',
+            current_version: (d.current_version as string) ?? '',
+            available_version: (pending?.target_version as string) ?? null,
+            vendor: (d.vendor as string) ?? 'Unknown',
+            platform: (d.device_type as string) ?? '',
+            update_status: pending ? 'update_available' : 'current',
+            last_checked: new Date().toISOString(),
+            cve_count: 0,
+          } as SoftwareInfo
+        })
+        setSoftware(mapped)
+      }
     } catch {
       // use mock
     } finally {

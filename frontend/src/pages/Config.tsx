@@ -7,7 +7,21 @@ import type { DeviceConfig, ConfigChange } from '../types'
 import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 
-const MOCK_DEVICES = ['core-sw-01', 'core-sw-02', 'dist-sw-01', 'dist-sw-02', 'edge-router-01', 'firewall-01']
+// Hostname → backend device_id mapping for the Config page
+const DEVICE_ID_MAP: Record<string, string> = {
+  'core-router-01': 'dev-001',
+  'core-router-02': 'dev-002',
+  'edge-router-01': 'dev-003',
+  'edge-router-02': 'dev-004',
+  'dist-switch-01': 'dev-005',
+  'dist-switch-02': 'dev-006',
+  'fw-primary':     'dev-007',
+  'fw-secondary':   'dev-008',
+  'web-server-01':  'dev-009',
+  'db-server-01':   'dev-010',
+}
+
+const MOCK_DEVICES = Object.keys(DEVICE_ID_MAP)
 
 const MOCK_CONFIGS: Record<string, DeviceConfig> = {
   'core-sw-01': {
@@ -79,8 +93,19 @@ const Config: React.FC = () => {
   const fetchConfig = useCallback(async (hostname: string) => {
     setLoading(true)
     try {
-      const res = await client.get<DeviceConfig>(`/api/v1/config/${hostname}`)
-      setConfig(res.data)
+      // Backend uses device_id, not hostname
+      const deviceId = DEVICE_ID_MAP[hostname] ?? hostname
+      const res = await client.get<{ device_id: string; config: string }>(`/api/config/${deviceId}`)
+      // Adapt backend { device_id, config } to DeviceConfig shape
+      setConfig({
+        device_id: res.data.device_id,
+        hostname,
+        config_text: res.data.config,
+        captured_at: new Date().toISOString(),
+        checksum: '',
+        compliance_status: 'unknown',
+        violations: [],
+      })
     } catch {
       setConfig(MOCK_CONFIGS[hostname] ?? null)
     } finally {

@@ -37,8 +37,15 @@ const Alerts: React.FC = () => {
   const fetchAlerts = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Alert[]>('/api/v1/alerts?limit=50')
-      if (res.data.length) setAlerts(res.data)
+      const res = await client.get<Alert[]>('/api/alerts')
+      if (res.data.length) {
+        // Map backend device_name → device_hostname for display
+        const mapped = res.data.map((a) => ({
+          ...a,
+          device_hostname: a.device_name ?? a.device_hostname,
+        }))
+        setAlerts(mapped)
+      }
     } catch {
       // use mock
     } finally {
@@ -51,7 +58,7 @@ const Alerts: React.FC = () => {
   const handleAck = async (id: string) => {
     setAckingId(id)
     try {
-      await client.post(`/api/v1/alerts/${id}/acknowledge`)
+      await client.post(`/api/alerts/${id}/acknowledge`)
     } catch {
       // optimistic update
     } finally {

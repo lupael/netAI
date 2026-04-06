@@ -11,15 +11,32 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
-    // Attempt WS ping to check connectivity
-    try {
-      const ws = new WebSocket(`ws://localhost:8000/ws/status`)
-      ws.onopen = () => setWsConnected(true)
-      ws.onerror = () => setWsConnected(false)
-      ws.onclose = () => setWsConnected(false)
-      return () => ws.close()
-    } catch {
-      setWsConnected(false)
+    // Connect to backend WebSocket using relative path to work across environments
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = import.meta.env.VITE_WS_HOST ?? window.location.host
+    const wsUrl = `${protocol}//${host}/ws`
+    let ws: WebSocket | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+    const connect = () => {
+      try {
+        ws = new WebSocket(wsUrl)
+        ws.onopen = () => setWsConnected(true)
+        ws.onerror = () => setWsConnected(false)
+        ws.onclose = () => {
+          setWsConnected(false)
+          // Reconnect after 5s
+          reconnectTimer = setTimeout(connect, 5000)
+        }
+      } catch {
+        setWsConnected(false)
+      }
+    }
+
+    connect()
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      ws?.close()
     }
   }, [])
 

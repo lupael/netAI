@@ -60,9 +60,13 @@ export interface TopologyLink {
 }
 
 export interface Topology {
-  nodes: TopologyNode[]
+  /** Backend field name. Also aliased as `nodes` for the SVG map. */
+  devices?: TopologyNode[]
+  nodes?: TopologyNode[]
   links: TopologyLink[]
-  last_updated: string
+  /** Backend field name */
+  timestamp?: string
+  last_updated?: string
 }
 
 // ===== Threat Types =====
@@ -98,6 +102,9 @@ export interface Alert {
   title: string
   message: string
   device_id?: string
+  /** Backend field; also used as device_hostname for display */
+  device_name?: string
+  /** Alias for device_name — kept for backward compatibility with mock data */
   device_hostname?: string
   timestamp: string
   acknowledged: boolean
@@ -186,12 +193,12 @@ export interface ChatAction {
 }
 
 export interface NLPResponse {
-  answer: string
-  intent: string
-  entities: Record<string, string>
+  response: string
+  intent?: string
+  entities?: Record<string, string>
   data?: Record<string, unknown>
   actions?: ChatAction[]
-  confidence: number
+  confidence?: number
 }
 
 // ===== Dashboard KPI Types =====

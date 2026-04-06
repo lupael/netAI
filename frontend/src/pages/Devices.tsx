@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import StatusBadge from '../components/StatusBadge'
 import LoadingSpinner from '../components/LoadingSpinner'
 import client from '../api/client'
 import type { Device, DeviceStatus } from '../types'
-import { Cpu, HardDrive, MemoryStick, Thermometer, AlertTriangle, Activity } from 'lucide-react'
+import { Cpu, HardDrive, MemoryStick, Thermometer, AlertTriangle, Activity, ExternalLink } from 'lucide-react'
 import { format, subMinutes } from 'date-fns'
 
 const MOCK_DEVICES: Device[] = [
@@ -32,6 +33,7 @@ const PERF_DATA = Array.from({ length: 24 }, (_, i) => ({
 const usageColor = (val: number) => val >= 90 ? '#ef4444' : val >= 70 ? '#f59e0b' : '#10b981'
 
 const Devices: React.FC = () => {
+  const navigate = useNavigate()
   const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES)
   const [selected, setSelected] = useState<Device>(MOCK_DEVICES[0])
   const [loading, setLoading] = useState(true)
@@ -165,7 +167,16 @@ const Devices: React.FC = () => {
                       <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{selected.hostname}</h3>
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 2 }}>{selected.ip_address}</p>
                     </div>
-                    <StatusBadge status={selected.status} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => navigate(`/devices/${selected.id}`)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11 }}
+                      >
+                        <ExternalLink size={12} /> View Dashboard
+                      </button>
+                      <StatusBadge status={selected.status} />
+                    </div>
                   </div>
 
                   <div className="grid-2" style={{ gap: 12, marginBottom: 16 }}>

@@ -69,21 +69,43 @@ const Software: React.FC = () => {
     e.preventDefault()
     if (!scheduleDevice || !scheduleVersion) return
     setScheduling(true)
-    await new Promise((r) => setTimeout(r, 1000))
-    const dev = software.find((s) => s.hostname === scheduleDevice)
-    const newJob: UpgradeJob = {
-      id: `j${Date.now()}`,
-      device_id: dev?.device_id ?? '',
-      hostname: scheduleDevice,
-      target_version: scheduleVersion,
-      scheduled_at: scheduleTime ? new Date(scheduleTime).toISOString() : new Date(Date.now() + 3600000).toISOString(),
-      status: 'pending',
-      progress_pct: 0,
+    try {
+      const dev = software.find((s) => s.hostname === scheduleDevice)
+      const deviceId = dev?.device_id ?? scheduleDevice
+      const scheduledAt = scheduleTime ? new Date(scheduleTime).toISOString() : undefined
+      const res = await client.post<Record<string, unknown>>('/api/software/upgrade', {
+        device_id: deviceId,
+        target_version: scheduleVersion,
+        ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+      })
+      const d = res.data
+      const newJob: UpgradeJob = {
+        id: d.id as string,
+        device_id: d.device_id as string,
+        hostname: scheduleDevice,
+        target_version: d.target_version as string,
+        scheduled_at: d.scheduled_at as string ?? new Date(Date.now() + 3600000).toISOString(),
+        status: (d.status as string ?? 'pending') as UpgradeJob['status'],
+        progress_pct: 0,
+      }
+      setJobs((prev) => [newJob, ...prev])
+    } catch {
+      // Fallback: add local job so UI still reflects user action
+      const dev = software.find((s) => s.hostname === scheduleDevice)
+      setJobs((prev) => [{
+        id: `j${Date.now()}`,
+        device_id: dev?.device_id ?? '',
+        hostname: scheduleDevice,
+        target_version: scheduleVersion,
+        scheduled_at: scheduleTime ? new Date(scheduleTime).toISOString() : new Date(Date.now() + 3600000).toISOString(),
+        status: 'pending',
+        progress_pct: 0,
+      }, ...prev])
+    } finally {
+      setScheduleDevice(''); setScheduleVersion(''); setScheduleTime('')
+      setScheduling(false); setScheduled(true)
+      setTimeout(() => setScheduled(false), 3000)
     }
-    setJobs((prev) => [newJob, ...prev])
-    setScheduleDevice(''); setScheduleVersion(''); setScheduleTime('')
-    setScheduling(false); setScheduled(true)
-    setTimeout(() => setScheduled(false), 3000)
   }
 
   const pending = software.filter((s) => s.update_status !== 'current')

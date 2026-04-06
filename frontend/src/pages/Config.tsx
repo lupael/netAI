@@ -117,14 +117,45 @@ const Config: React.FC = () => {
 
   const handleAudit = async () => {
     setAuditing(true)
-    await new Promise((r) => setTimeout(r, 1200))
-    setAuditing(false)
+    try {
+      const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+      const res = await client.post<{ compliant: boolean; issues: string[]; recommendations: string[]; score: number }>(`/api/config/${deviceId}/audit`)
+      // Update config compliance status from audit result
+      if (config) {
+        setConfig({
+          ...config,
+          compliance_status: res.data.compliant ? 'compliant' : 'non_compliant',
+          violations: res.data.issues.map((issue, i) => ({
+            rule_id: `RULE-${i + 1}`,
+            severity: (res.data.score < 50 ? 'critical' : res.data.score < 75 ? 'high' : 'medium') as 'critical' | 'high' | 'medium' | 'low' | 'info',
+            description: issue,
+          })),
+        })
+      }
+    } catch {
+      // no-op: audit may not be available for all devices
+    } finally {
+      setAuditing(false)
+    }
   }
 
   const handleApply = async () => {
     setApplying(true)
-    await new Promise((r) => setTimeout(r, 1500))
-    setApplying(false)
+    try {
+      if (config?.config_text) {
+        const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+        await client.post(`/api/config/${deviceId}/apply`, {
+          change_type: 'interface_change',
+          new_config: config.config_text,
+          author: 'admin',
+          comment: 'Applied via netAI dashboard',
+        })
+      }
+    } catch {
+      // no-op: backend may not accept partial configs
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (

@@ -12,6 +12,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Wifi,
+  Link2,
+  GitMerge,
+  Globe,
+  Workflow,
+  MapPin,
+  BarChart3,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -29,6 +35,12 @@ const navItems: NavItem[] = [
   { path: '/devices', label: 'Device Health', icon: <Server size={18} /> },
   { path: '/software', label: 'Software', icon: <Package size={18} /> },
   { path: '/alerts', label: 'Alerts', icon: <Bell size={18} /> },
+  { path: '/links', label: 'Link Monitor', icon: <Link2 size={18} /> },
+  { path: '/bgp', label: 'BGP Monitor', icon: <GitMerge size={18} /> },
+  { path: '/circuits', label: 'Circuits', icon: <Globe size={18} /> },
+  { path: '/workflows', label: 'Workflows', icon: <Workflow size={18} /> },
+  { path: '/ip-management', label: 'IP Management', icon: <MapPin size={18} /> },
+  { path: '/reports', label: 'Reports', icon: <BarChart3 size={18} /> },
   { path: '/nlp', label: 'AI Assistant', icon: <MessageSquare size={18} /> },
 ]
 

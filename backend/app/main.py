@@ -12,7 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import alerts, config_mgmt, devices, nlp, software, threats, topology, vendors
+from app.api.routes import alerts, bgp, circuits, config_mgmt, devices, ip_management, links, nlp, reports, software, threats, topology, vendors, workflows
 
 logger = logging.getLogger("netai")
 
@@ -30,7 +30,8 @@ class ConnectionManager:
         logger.info("WebSocket connected — total=%d", len(self.active_connections))
 
     def disconnect(self, websocket: WebSocket) -> None:
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         logger.info("WebSocket disconnected — total=%d", len(self.active_connections))
 
     async def broadcast(self, message: dict) -> None:
@@ -137,6 +138,12 @@ app.include_router(software.router)
 app.include_router(alerts.router)
 app.include_router(nlp.router)
 app.include_router(vendors.router)
+app.include_router(bgp.router)
+app.include_router(circuits.router)
+app.include_router(workflows.router)
+app.include_router(ip_management.router)
+app.include_router(links.router)
+app.include_router(reports.router)
 
 
 # ---------------------------------------------------------------------------

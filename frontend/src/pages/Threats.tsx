@@ -37,12 +37,16 @@ const Threats: React.FC = () => {
   const fetchThreats = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Threat[]>('/api/threats')
-      // Backend ThreatAlert uses target_ip / timestamp / status enum values
-      const mapped = res.data.map((t) => ({
-        ...t,
-        destination_ip: (t as unknown as Record<string, string>).target_ip ?? t.destination_ip,
-        detected_at: (t as unknown as Record<string, string>).timestamp ?? t.detected_at,
+      const res = await client.get<Record<string, unknown>[]>('/api/threats')
+      // Backend ThreatAlert uses target_ip / timestamp and confidence is 0-1 float
+      const mapped: Threat[] = res.data.map((t) => ({
+        ...(t as unknown as Threat),
+        destination_ip: (t.target_ip ?? t.destination_ip) as string,
+        detected_at: (t.timestamp ?? t.detected_at) as string,
+        // Scale confidence from 0-1 float to 0-100 percentage
+        confidence: t.confidence != null
+          ? (t.confidence as number) <= 1 ? Math.round((t.confidence as number) * 100) : t.confidence as number
+          : 0,
       }))
       setThreats(mapped)
     } catch {

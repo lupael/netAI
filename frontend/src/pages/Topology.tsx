@@ -42,9 +42,9 @@ const MOCK_TOPOLOGY: Topology = {
   ],
 }
 
-// ---- Layout positions (percentage-based) ----
+// ---- Layout positions (percentage-based) — for mock node IDs ----
 type NodePositions = Record<string, { x: number; y: number }>
-const NODE_POSITIONS: NodePositions = {
+const MOCK_NODE_POSITIONS: NodePositions = {
   'wan-01':  { x: 50, y: 5 },
   'fw-01':   { x: 50, y: 16 },
   'edge-01': { x: 50, y: 27 },
@@ -58,6 +58,35 @@ const NODE_POSITIONS: NodePositions = {
   'acc-03':  { x: 43, y: 74 },
   'acc-04':  { x: 58, y: 74 },
   'acc-05':  { x: 80, y: 74 },
+}
+
+/**
+ * Compute a hierarchical layout for a node list.
+ * Devices are bucketed by type into layers; nodes within a layer are spread horizontally.
+ */
+function computeLayout(nodes: TopologyNode[]): NodePositions {
+  const LAYER_ORDER: Record<string, number> = {
+    router: 0, firewall: 1, core_switch: 2,
+    distribution_switch: 3, switch: 3, access_switch: 4, server: 5,
+  }
+  const layers: TopologyNode[][] = [[], [], [], [], [], []]
+  for (const n of nodes) {
+    const layer = LAYER_ORDER[n.device_type] ?? 3
+    layers[layer].push(n)
+  }
+  const positions: NodePositions = {}
+  const Y_STEPS = [8, 18, 30, 50, 68, 84]
+  layers.forEach((layerNodes, li) => {
+    if (!layerNodes.length) return
+    const y = Y_STEPS[li] ?? 50 + li * 10
+    layerNodes.forEach((n, i) => {
+      const span = 80
+      const start = 10
+      const x = layerNodes.length === 1 ? 50 : start + (span / (layerNodes.length - 1)) * i
+      positions[n.id] = { x, y }
+    })
+  })
+  return positions
 }
 
 const STATUS_COLOR: Record<DeviceStatus, string> = {
@@ -84,6 +113,7 @@ const DEVICE_ICON: Record<string, string> = {
 
 const Topology: React.FC = () => {
   const [topology, setTopology] = useState<Topology>(MOCK_TOPOLOGY)
+  const [nodePositions, setNodePositions] = useState<NodePositions>(MOCK_NODE_POSITIONS)
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<TopologyNode | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -92,15 +122,45 @@ const Topology: React.FC = () => {
   const fetchTopology = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await client.get<Topology>('/api/topology')
-      // Backend returns { devices, links, timestamp } — normalise to { nodes, links, last_updated }
+      const res = await client.get<Record<string, unknown>>('/api/topology')
       const raw = res.data
+
+      // Adapt backend Device[] → TopologyNode[]
+      const rawDevices = (raw.devices ?? raw.nodes ?? []) as Record<string, unknown>[]
+      const nodes: TopologyNode[] = rawDevices.map((d) => ({
+        id: d.id as string,
+        hostname: (d.name ?? d.hostname) as string,
+        ip_address: (d.ip ?? d.ip_address) as string,
+        device_type: (d.type ?? d.device_type) as string,
+        status: (() => {
+          const s = d.status as string
+          if (s === 'online') return 'healthy'
+          if (s === 'offline') return 'down'
+          return s as TopologyNode['status']
+        })(),
+      }))
+
+      // Adapt backend NetworkLink[] → TopologyLink[]
+      const rawLinks = (raw.links ?? []) as Record<string, unknown>[]
+      const links: TopologyLink[] = rawLinks.map((l) => ({
+        source: (l.source_id ?? l.source) as string,
+        target: (l.target_id ?? l.target) as string,
+        bandwidth_mbps: (l.bandwidth ?? l.bandwidth_mbps ?? 1000) as number,
+        utilization_pct: (l.utilization ?? l.utilization_pct ?? 0) as number,
+        status: (() => {
+          const s = l.status as string
+          if (s === 'up') return 'active'
+          return s as TopologyLink['status']
+        })(),
+      }))
+
       const normalized: Topology = {
-        nodes: raw.devices ?? raw.nodes ?? [],
-        links: raw.links,
-        last_updated: raw.timestamp ?? raw.last_updated ?? new Date().toISOString(),
+        nodes,
+        links,
+        last_updated: (raw.timestamp ?? raw.last_updated ?? new Date().toISOString()) as string,
       }
       setTopology(normalized)
+      setNodePositions(computeLayout(nodes))
     } catch {
       // use mock
     } finally {
@@ -121,7 +181,7 @@ const Topology: React.FC = () => {
   }, [])
 
   const nodePos = (id: string) => {
-    const p = NODE_POSITIONS[id] ?? { x: 50, y: 50 }
+    const p = nodePositions[id] ?? { x: 50, y: 50 }
     return { x: (p.x / 100) * svgSize.w, y: (p.y / 100) * svgSize.h }
   }
 

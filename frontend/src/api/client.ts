@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Use same-origin base URL so nginx proxying works in Docker/production.
+// Override with VITE_API_URL only when explicitly needed (e.g., local dev pointing at a remote backend).
+const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 const client = axios.create({
   baseURL: BASE_URL,

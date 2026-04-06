@@ -51,14 +51,16 @@ def _handle_list_devices() -> NLPResponse:
     online = [d for d in db.devices_db if d.status.value == "online"]
     degraded = [d for d in db.devices_db if d.status.value == "degraded"]
     offline = [d for d in db.devices_db if d.status.value == "offline"]
+    attention_list = (
+        ", ".join(d.name for d in db.devices_db if d.cpu_usage > 80 or d.memory_usage > 85)
+        or "none"
+    )
     response = (
         f"There are **{len(db.devices_db)} devices** in the network:\n"
         f"- ✅ Online: {len(online)}\n"
         f"- ⚠️ Degraded: {len(degraded)}\n"
         f"- ❌ Offline: {len(offline)}\n\n"
-        "Devices requiring attention: "
-        + ", ".join(d.name for d in db.devices_db if d.cpu_usage > 80 or d.memory_usage > 85)
-        or "none"
+        f"Devices requiring attention: {attention_list}"
     )
     return NLPResponse(
         response=response,

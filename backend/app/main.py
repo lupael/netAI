@@ -4,15 +4,25 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import time as _time
+from collections import defaultdict as _defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import alerts, bgp, circuits, config_mgmt, devices, ip_management, links, nlp, reports, software, threats, topology, vendors, workflows
+from app.api.routes import (
+    alerts, bgp, circuits, config_mgmt, devices, ip_management,
+    links, nlp, reports, software, threats, topology, vendors, workflows,
+)
+from app.api.routes import audit, auth
+from app.core.auth import decode_token
 
 logger = logging.getLogger("netai")
 
@@ -46,6 +56,53 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ---------------------------------------------------------------------------
+# Request body size limit middleware (1 MB)
+# ---------------------------------------------------------------------------
+
+class _LimitBodySize(BaseHTTPMiddleware):
+    def __init__(self, app, max_bytes: int = 1_048_576) -> None:
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.max_bytes:
+            return Response(status_code=413, content="Request body too large")
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# Simple in-memory rate limiter middleware
+# Limits: 30 req/min on /api/nlp/query, 10 req/min on /api/auth/login
+# ---------------------------------------------------------------------------
+
+_rate_windows: dict = _defaultdict(list)
+_RATE_LIMITS = {
+    "/api/nlp/query": (30, 60),
+    "/api/auth/login": (10, 60),
+}
+
+
+class _PathRateLimit(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if path in _RATE_LIMITS:
+            max_calls, window = _RATE_LIMITS[path]
+            client = (request.client.host if request.client else "unknown")
+            key = f"{client}:{path}"
+            now = _time.monotonic()
+            _rate_windows[key] = [t for t in _rate_windows[key] if now - t < window]
+            if len(_rate_windows[key]) >= max_calls:
+                return Response(
+                    status_code=429,
+                    content="Too Many Requests",
+                    headers={"Retry-After": str(window)},
+                )
+            _rate_windows[key].append(now)
+        return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
@@ -116,15 +173,32 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — credentials are not used, so wildcard origins are safe here.
-# In production, restrict allow_origins to your frontend domain.
+# ---------------------------------------------------------------------------
+# CORS — origins configurable via ALLOWED_ORIGINS env var (comma-separated)
+# ---------------------------------------------------------------------------
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
+_origins = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    if _raw_origins
+    else ["*"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request body size limit (1 MB)
+app.add_middleware(_LimitBodySize, max_bytes=1_048_576)
+# Path-level rate limiting (30/min NLP, 10/min auth)
+app.add_middleware(_PathRateLimit)
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics — exposes /metrics endpoint
+# ---------------------------------------------------------------------------
+Instrumentator().instrument(app).expose(app)
 
 # ---------------------------------------------------------------------------
 # Mount routers
@@ -144,6 +218,8 @@ app.include_router(workflows.router)
 app.include_router(ip_management.router)
 app.include_router(links.router)
 app.include_router(reports.router)
+app.include_router(auth.router)
+app.include_router(audit.router)
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +227,16 @@ app.include_router(reports.router)
 # ---------------------------------------------------------------------------
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(default=None),
+):
+    if token:
+        try:
+            decode_token(token)
+        except Exception:
+            await websocket.close(code=1008)
+            return
     await manager.connect(websocket)
     try:
         while True:

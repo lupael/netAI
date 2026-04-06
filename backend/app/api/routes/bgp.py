@@ -120,10 +120,10 @@ _BGP_HIJACKS: List[Dict[str, Any]] = [
 ]
 
 
-@router.get("/sessions")
-async def get_bgp_sessions() -> List[Dict[str, Any]]:
-    """List all BGP sessions."""
-    return _BGP_SESSIONS
+@router.get("/sessions", summary="List BGP sessions")
+async def get_bgp_sessions(skip: int = 0, limit: int = 50) -> List[Dict[str, Any]]:
+    """List all BGP sessions (paginated)."""
+    return _BGP_SESSIONS[skip : skip + limit]
 
 
 @router.get("/hijacks")

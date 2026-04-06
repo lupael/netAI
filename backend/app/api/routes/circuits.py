@@ -95,10 +95,10 @@ _CIRCUITS: List[Dict[str, Any]] = [
 ]
 
 
-@router.get("")
-async def get_circuits() -> List[Dict[str, Any]]:
-    """List all WAN/NTTN/ISP circuits."""
-    return _CIRCUITS
+@router.get("", summary="List all circuits")
+async def get_circuits(skip: int = 0, limit: int = 50) -> List[Dict[str, Any]]:
+    """List all WAN/NTTN/ISP circuits (paginated)."""
+    return _CIRCUITS[skip : skip + limit]
 
 
 @router.get("/{circuit_id}")

@@ -8,10 +8,10 @@ from app.core import database as db
 router = APIRouter(prefix="/api/links", tags=["links"])
 
 
-@router.get("")
-async def get_all_links():
-    """Return all network links with status, utilization, latency, bandwidth."""
-    return db.links_db
+@router.get("", summary="List all network links")
+async def get_all_links(skip: int = 0, limit: int = 50):
+    """Return paginated network links with status, utilization, latency, bandwidth."""
+    return db.links_db[skip : skip + limit]
 
 
 @router.get("/stats")

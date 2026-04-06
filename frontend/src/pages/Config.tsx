@@ -7,22 +7,6 @@ import type { DeviceConfig, ConfigChange } from '../types'
 import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 
-// Hostname → backend device_id mapping for the Config page
-const DEVICE_ID_MAP: Record<string, string> = {
-  'core-router-01': 'dev-001',
-  'core-router-02': 'dev-002',
-  'edge-router-01': 'dev-003',
-  'edge-router-02': 'dev-004',
-  'dist-switch-01': 'dev-005',
-  'dist-switch-02': 'dev-006',
-  'fw-primary':     'dev-007',
-  'fw-secondary':   'dev-008',
-  'web-server-01':  'dev-009',
-  'db-server-01':   'dev-010',
-}
-
-const MOCK_DEVICES = Object.keys(DEVICE_ID_MAP)
-
 const MOCK_CONFIGS: Record<string, DeviceConfig> = {
   'core-router-01': {
     device_id: 'dev-001',
@@ -90,11 +74,35 @@ const Config: React.FC = () => {
   const [auditing, setAuditing] = useState(false)
   const [applying, setApplying] = useState(false)
 
+  // Device list and id-map fetched from the backend
+  const [deviceNames, setDeviceNames] = useState<string[]>(Object.keys(MOCK_CONFIGS))
+  const [deviceIdMap, setDeviceIdMap] = useState<Record<string, string>>({})
+
+  // Fetch device list and build hostname → id map
+  useEffect(() => {
+    client
+      .get<{ id: string; name: string }[]>('/api/devices')
+      .then((res) => {
+        const names = res.data.map((d) => d.name)
+        const map: Record<string, string> = {}
+        res.data.forEach((d) => { map[d.name] = d.id })
+        setDeviceNames(names.length > 0 ? names : Object.keys(MOCK_CONFIGS))
+        setDeviceIdMap(map)
+        if (names.length > 0 && !names.includes(selectedDevice)) {
+          setSelectedDevice(names[0])
+        }
+      })
+      .catch(() => {
+        // Fall back to static list derived from MOCK_CONFIGS
+        setDeviceNames(Object.keys(MOCK_CONFIGS))
+      })
+  }, [])
+
   const fetchConfig = useCallback(async (hostname: string) => {
     setLoading(true)
     try {
-      // Backend uses device_id, not hostname
-      const deviceId = DEVICE_ID_MAP[hostname] ?? hostname
+      // Use dynamic id map from API; fall back to hostname directly
+      const deviceId = deviceIdMap[hostname] ?? hostname
       const res = await client.get<{ device_id: string; config: string }>(`/api/config/${deviceId}`)
       // Adapt backend { device_id, config } to DeviceConfig shape
       setConfig({
@@ -111,14 +119,14 @@ const Config: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [deviceIdMap])
 
   useEffect(() => { void fetchConfig(selectedDevice) }, [selectedDevice, fetchConfig])
 
   const handleAudit = async () => {
     setAuditing(true)
     try {
-      const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+      const deviceId = deviceIdMap[selectedDevice] ?? selectedDevice
       const res = await client.post<{ compliant: boolean; issues: string[]; recommendations: string[]; score: number }>(`/api/config/${deviceId}/audit`)
       // Update config compliance status from audit result
       if (config) {
@@ -143,7 +151,7 @@ const Config: React.FC = () => {
     setApplying(true)
     try {
       if (config?.config_text) {
-        const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+        const deviceId = deviceIdMap[selectedDevice] ?? selectedDevice
         await client.post(`/api/config/${deviceId}/apply`, {
           change_type: 'interface_change',
           new_config: config.config_text,
@@ -186,7 +194,7 @@ const Config: React.FC = () => {
                 value={selectedDevice}
                 onChange={(e) => setSelectedDevice(e.target.value)}
               >
-                {MOCK_DEVICES.map((d) => (
+              {deviceNames.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -215,7 +223,7 @@ const Config: React.FC = () => {
             <p className="card-title">Compliance Status</p>
 
             {/* All devices compliance summary */}
-            {MOCK_DEVICES.map((hostname) => {
+            {deviceNames.map((hostname) => {
               const cfg = MOCK_CONFIGS[hostname]
               const status = cfg?.compliance_status ?? 'unknown'
               const violations = cfg?.violations?.length ?? 0

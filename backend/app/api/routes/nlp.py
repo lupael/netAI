@@ -11,7 +11,7 @@ from app.services import nlp_service
 router = APIRouter(prefix="/api/nlp", tags=["nlp"])
 
 
-@router.post("/query", response_model=NLPResponse)
+@router.post("/query", response_model=NLPResponse, summary="Process a natural language query")
 async def process_query(query: NLPQuery):
     """Process a natural language query and return an AI-generated response."""
     return nlp_service.process_query(query)

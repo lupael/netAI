@@ -79,29 +79,35 @@
 ```
 backend/
 ├── app/
-│   ├── main.py                  # FastAPI app, CORS, WebSocket, health endpoints
+│   ├── main.py                  # FastAPI app, CORS, WebSocket manager, health endpoints
 │   ├── api/
 │   │   └── routes/
 │   │       ├── alerts.py        # GET /api/alerts, POST /{id}/acknowledge
+│   │       ├── bgp.py           # GET /api/bgp/sessions, /hijacks, POST hijacks/{id}/resolve
+│   │       ├── circuits.py      # GET /api/circuits, /circuits/{id}
 │   │       ├── config_mgmt.py   # GET/POST /api/config/{device_id}
-│   │       ├── devices.py       # GET /api/devices, /devices/{id}/health
+│   │       ├── devices.py       # GET /api/devices, /devices/{id}/health, /predictions
+│   │       ├── ip_management.py # GET /api/ip/subnets, /assignments, /ports
+│   │       ├── links.py         # GET /api/links, /links/stats, /links/{id}
 │   │       ├── nlp.py           # POST /api/nlp/query
+│   │       ├── reports.py       # GET /api/reports/summary, /uptime, /bandwidth, /incidents
 │   │       ├── software.py      # GET /api/software/inventory, POST /upgrade
 │   │       ├── threats.py       # GET /api/threats, POST /{id}/mitigate
 │   │       ├── topology.py      # GET /api/topology, POST /discover
-│   │       └── vendors.py       # GET /api/vendors, /{key}/capabilities
+│   │       ├── vendors.py       # GET /api/vendors, /{key}/capabilities
+│   │       └── workflows.py     # GET /api/workflows, /runs, POST /{id}/run
 │   ├── core/
-│   │   ├── database.py          # In-memory datastore with 15 seed devices
-│   │   ├── device_registry.py   # Per-vendor capability registry
+│   │   ├── database.py          # In-memory datastore with 15 seed devices + links
+│   │   ├── device_registry.py   # Per-vendor capability registry (8 categories × 8 vendors)
 │   │   ├── ml/
 │   │   │   └── anomaly_detector.py   # z-score, IQR, EWMA anomaly detection
 │   │   ├── models.py            # Pydantic v2 models
-│   │   └── vendors.py           # Vendor profiles & identification
+│   │   └── vendors.py           # Vendor profiles & fingerprint identification
 │   └── services/
 │       ├── config_service.py
 │       ├── device_service.py
-│       ├── nlp_service.py
-│       ├── software_service.py
+│       ├── nlp_service.py       # ChatOps intent-matching; actions use {type, label, value}
+│       ├── software_service.py  # schedule_upgrade() validates device_id (404 if unknown)
 │       ├── threat_service.py
 │       └── topology_service.py
 ├── requirements.txt
@@ -347,19 +353,21 @@ Full interactive docs: **http://localhost:8000/docs** (Swagger UI)
 | GET | `/api/topology` | Full topology (devices + links) |
 | POST | `/api/topology/discover` | Trigger discovery scan |
 | GET | `/api/devices` | All devices |
+| GET | `/api/devices/{id}` | Device detail |
 | GET | `/api/devices/{id}/health` | Device health metrics |
+| GET | `/api/devices/{id}/metrics` | Device time-series metrics |
 | GET | `/api/devices/predictions` | Failure predictions |
 | GET | `/api/threats` | All threat alerts |
 | GET | `/api/threats/active` | Active threats only |
 | POST | `/api/threats/{id}/mitigate` | Mitigate a threat |
 | GET | `/api/config/{device_id}` | Device running config |
-| POST | `/api/config/{device_id}/audit` | Compliance audit |
+| POST | `/api/config/{device_id}/audit` | Compliance audit (returns `{compliant, issues, score}`) |
 | POST | `/api/config/{device_id}/apply` | Apply config change |
 | POST | `/api/config/{device_id}/rollback` | Rollback config |
 | GET | `/api/config/history` | Config change history |
 | GET | `/api/software/inventory` | Software inventory |
 | GET | `/api/software/updates` | Pending updates |
-| POST | `/api/software/upgrade` | Schedule upgrade |
+| POST | `/api/software/upgrade` | Schedule upgrade (validates device_id; 404 if unknown) |
 | POST | `/api/software/{id}/execute` | Execute update |
 | GET | `/api/alerts` | All alerts |
 | POST | `/api/alerts/{id}/acknowledge` | Acknowledge alert |
@@ -368,7 +376,41 @@ Full interactive docs: **http://localhost:8000/docs** (Swagger UI)
 | GET | `/api/vendors/{key}` | Vendor profile detail |
 | GET | `/api/vendors/{key}/capabilities` | Vendor capabilities |
 | GET | `/api/devices/{id}/vendor` | Device vendor info |
+| GET | `/api/links` | All network links with utilization/latency |
+| GET | `/api/links/stats` | Aggregate link statistics |
+| GET | `/api/links/{id}` | Link detail |
+| GET | `/api/bgp/sessions` | BGP session list |
+| GET | `/api/bgp/hijacks` | BGP hijack events |
+| POST | `/api/bgp/hijacks/{id}/resolve` | Mark hijack resolved |
+| GET | `/api/circuits` | WAN/NTTN/ISP circuit status |
+| GET | `/api/circuits/{id}` | Circuit detail |
+| GET | `/api/workflows` | Workflow templates |
+| GET | `/api/workflows/runs` | Workflow execution history |
+| POST | `/api/workflows/{id}/run` | Trigger a workflow |
+| GET | `/api/ip/subnets` | IP subnet utilization |
+| GET | `/api/ip/assignments` | IP address assignments |
+| GET | `/api/ip/ports` | Switch port assignments |
+| GET | `/api/reports/summary` | Network summary report |
+| GET | `/api/reports/uptime` | Device uptime (30-day) |
+| GET | `/api/reports/bandwidth` | Bandwidth utilization (24h) |
+| GET | `/api/reports/incidents` | Incident rollup report |
 | WS | `/ws` | Real-time telemetry stream |
+
+### NLP Action Schema
+
+NLP responses include `actions` with the following shape (matching the `ChatAction` TypeScript interface):
+
+```json
+{
+  "type": "navigate",
+  "label": "View Topology",
+  "value": "/topology"
+}
+```
+
+### AlertType Values
+
+Backend `AlertType` enum values: `cpu_high`, `memory_high`, `disk_high`, `link_down`, `device_offline`, `threat_detected`, `config_drift`, `latency_high`, `packet_loss`, `firmware_outdated`.
 
 ---
 
@@ -431,8 +473,8 @@ File: `.github/workflows/ci.yml`
 
 | Job | Trigger | Steps |
 |-----|---------|-------|
-| `backend-lint-test` | push/PR | Install Python deps → verify import → start server → health check |
-| `frontend-lint-build` | push/PR | Install Node deps → TypeScript compile → Vite production build |
+| `backend-import-healthcheck` | push/PR | Install Python deps → verify import → start server → health check |
+| `frontend-build` | push/PR | Install Node deps → Vite production build |
 | `docker-compose-validate` | push/PR | Validate `docker-compose.yml` config |
 
 All jobs run with `permissions: contents: read` (minimal GitHub token scope).

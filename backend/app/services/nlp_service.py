@@ -64,7 +64,7 @@ def _handle_list_devices() -> NLPResponse:
     )
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/topology"}],
+        actions=[{"type": "navigate", "label": "View Topology", "value": "/topology"}],
         data=[d.model_dump() for d in db.devices_db],
         confidence=0.95,
     )
@@ -81,7 +81,7 @@ def _handle_list_threats() -> NLPResponse:
     ) if active else "✅ No active threats detected at this time."
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/threats"}],
+        actions=[{"type": "navigate", "label": "View Threats", "value": "/threats"}],
         data=[t.model_dump() for t in active],
         confidence=0.95,
     )
@@ -96,7 +96,7 @@ def _handle_list_alerts() -> NLPResponse:
     ) if unacked else "✅ All alerts have been acknowledged."
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/alerts"}],
+        actions=[{"type": "navigate", "label": "View Alerts", "value": "/alerts"}],
         data=[a.model_dump() for a in unacked],
         confidence=0.92,
     )
@@ -126,7 +126,7 @@ def _handle_device_health(query: str) -> NLPResponse:
         data = [d.model_dump() for d in db.devices_db]
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/devices"}],
+        actions=[{"type": "navigate", "label": "View Devices", "value": "/devices"}],
         data=data,
         confidence=0.88,
     )
@@ -140,7 +140,7 @@ def _handle_topology() -> NLPResponse:
     )
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/topology"}],
+        actions=[{"type": "navigate", "label": "View Topology", "value": "/topology"}],
         data={"devices": len(db.devices_db), "links": len(db.links_db)},
         confidence=0.93,
     )
@@ -160,7 +160,7 @@ def _handle_config_status() -> NLPResponse:
     )
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/config"}],
+        actions=[{"type": "navigate", "label": "View Config", "value": "/config"}],
         data=[c.model_dump() for c in non_compliant],
         confidence=0.90,
     )
@@ -178,7 +178,7 @@ def _handle_software_updates() -> NLPResponse:
     ) if pending else "✅ All devices are running up-to-date software."
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/software"}],
+        actions=[{"type": "navigate", "label": "View Software", "value": "/software"}],
         data=[u.model_dump() for u in pending],
         confidence=0.91,
     )
@@ -197,7 +197,7 @@ def _handle_failure_prediction() -> NLPResponse:
     ) if high_risk else "✅ No devices predicted to fail in the next 24 hours."
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/devices"}],
+        actions=[{"type": "navigate", "label": "View Devices", "value": "/devices"}],
         data=preds,
         confidence=0.82,
     )
@@ -215,7 +215,7 @@ def _handle_link_stats() -> NLPResponse:
     )
     return NLPResponse(
         response=response,
-        actions=[{"type": "navigate", "target": "/topology"}],
+        actions=[{"type": "navigate", "label": "View Topology", "value": "/topology"}],
         data=[l.model_dump() for l in db.links_db],
         confidence=0.89,
     )

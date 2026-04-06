@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  backend-lint-test:
-    name: Backend — Lint & Test
+  backend-import-healthcheck:
+    name: Backend — Import & Health Check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,8 +37,8 @@ jobs:
           sleep 4
           curl -f http://localhost:8000/health
 
-  frontend-lint-build:
-    name: Frontend — Lint & Build
+  frontend-build:
+    name: Frontend — Build
     runs-on: ubuntu-latest
     permissions:
       contents: read

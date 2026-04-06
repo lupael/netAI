@@ -27,14 +27,17 @@ It supports **8 network device vendors** out of the box — from Cisco and Junip
 netAI/
 ├── backend/          # Python / FastAPI REST API + WebSocket
 │   └── app/
-│       ├── api/routes/   # Endpoints (topology, threats, config, devices, software, alerts, nlp, vendors)
-│       ├── core/         # Pydantic models, in-memory datastore, ML anomaly detector, vendor adapters
+│       ├── api/routes/   # 14 route modules (topology, threats, config, devices, software,
+│       │                 #   alerts, nlp, vendors, links, bgp, circuits, workflows,
+│       │                 #   ip_management, reports)
+│       ├── core/         # Pydantic models, in-memory datastore, ML anomaly detector,
+│       │                 #   vendor profiles, device capability registry
 │       └── services/     # Business logic services
 ├── frontend/         # React 18 / TypeScript / Vite dashboard
 │   └── src/
-│       ├── pages/        # Dashboard, Topology, Threats, Config, Devices, Software, Alerts, NLP
+│       ├── pages/        # 15 pages (see table below)
 │       ├── components/   # Sidebar, Header, MetricCard, StatusBadge, LoadingSpinner
-│       ├── api/          # Axios client
+│       ├── api/          # Axios client (same-origin base URL for nginx proxy)
 │       └── types/        # TypeScript interfaces
 ├── docs/
 │   ├── developer-guide.md   # Developer documentation
@@ -45,20 +48,48 @@ netAI/
 
 ---
 
-## Core Modules
+## Frontend Pages
 
-| Module | Description | Endpoints |
-|--------|-------------|-----------|
-| **Network Topology** | Discover devices, map connections, visualize traffic flows | `GET /api/topology`, `POST /api/topology/discover` |
-| **Threat Detection** | Detect DDoS, anomalies, intrusions with ML | `GET /api/threats`, `POST /api/threats/{id}/mitigate` |
-| **Config Management** | Audit configs, detect misconfigurations, rollback | `GET /api/config/{device_id}`, `POST /api/config/{device_id}/audit` |
-| **Device Health** | CPU, memory, disk monitoring + failure prediction | `GET /api/devices/{id}/health`, `GET /api/devices/predictions` |
-| **Software Lifecycle** | Firmware inventory, upgrade scheduling | `GET /api/software/inventory`, `POST /api/software/upgrade` |
-| **Alerts Center** | Unified alert management with severity levels | `GET /api/alerts`, `POST /api/alerts/{id}/acknowledge` |
-| **AI Assistant** | Natural language interface for admin commands | `POST /api/nlp/query` |
-| **Vendor Management** | Multi-vendor profiles & capability registry | `GET /api/vendors`, `GET /api/vendors/{key}/capabilities` |
-| **Dashboard KPI** | Aggregated health summary for dashboard | `GET /api/dashboard/kpi` |
-| **WebSocket** | Real-time telemetry streaming | `ws://host/ws` |
+| Page | Route | Description |
+|------|-------|-------------|
+| **Dashboard** | `/` | KPI summary cards, network health donut, recent alerts, device health chart |
+| **Topology** | `/topology` | SVG network map — color-coded nodes, click-to-inspect panel; auto-layout by device type |
+| **Threats** | `/threats` | Active threat list, severity PieChart, anomaly timeline, mitigate action |
+| **Configuration** | `/config` | Per-device config viewer, compliance violations, change history, audit & apply |
+| **Device Health** | `/devices` | CPU/mem/disk bars, time-series charts, failure prediction badges, link to per-device dashboard |
+| **Software** | `/software` | Firmware inventory, CVE tracking, upgrade scheduling (wired to backend) |
+| **Alerts** | `/alerts` | Unified alert center with severity filters and acknowledgment |
+| **AI Assistant** | `/nlp` | ChatOps interface — natural language queries, suggested actions |
+| **Link Monitor** | `/links` | Per-link utilization bars, latency, packet loss, status badges |
+| **BGP Monitor** | `/bgp` | BGP session management, route hijack detection, resolve action |
+| **Circuit Status** | `/circuits` | WAN/NTTN/ISP circuit monitoring with SLA compliance coloring |
+| **Workflows** | `/workflows` | Automation templates with run buttons and execution history |
+| **IP Management** | `/ip-management` | Subnet utilization table, IP/VLAN assignments, switch port tracking |
+| **Reports** | `/reports` | Historical stats with Recharts bar/line charts and incident report |
+| **Device Detail** | `/devices/:id` | Per-device dashboard — real-time CPU/RAM/bandwidth, interface table, action buttons (Ping, SSH, Reboot, Config Backup, Audit, Upgrade) |
+
+---
+
+## Backend API Modules (57 endpoints)
+
+| Module | Description | Key Endpoints |
+|--------|-------------|---------------|
+| **Topology** | Device discovery, network map | `GET /api/topology`, `POST /api/topology/discover` |
+| **Threats** | ML-based threat detection | `GET /api/threats`, `POST /api/threats/{id}/mitigate` |
+| **Config** | Audit, apply, rollback | `GET /api/config/{id}`, `POST /api/config/{id}/audit`, `/apply` |
+| **Devices** | Health, metrics, predictions | `GET /api/devices`, `GET /api/devices/{id}/health`, `/predictions` |
+| **Software** | Firmware inventory, upgrades | `GET /api/software/inventory`, `POST /api/software/upgrade` |
+| **Alerts** | Alert management | `GET /api/alerts`, `POST /api/alerts/{id}/acknowledge` |
+| **NLP** | ChatOps interface | `POST /api/nlp/query` |
+| **Vendors** | Vendor profiles & capabilities | `GET /api/vendors`, `GET /api/vendors/{key}/capabilities` |
+| **Dashboard** | Aggregated KPIs | `GET /api/dashboard/kpi` |
+| **Links** | Link health & utilization | `GET /api/links`, `GET /api/links/stats` |
+| **BGP** | BGP sessions & hijack detection | `GET /api/bgp/sessions`, `GET /api/bgp/hijacks`, `POST /api/bgp/hijacks/{id}/resolve` |
+| **Circuits** | WAN/NTTN/ISP circuits | `GET /api/circuits`, `GET /api/circuits/{id}` |
+| **Workflows** | Automation templates | `GET /api/workflows`, `POST /api/workflows/{id}/run`, `GET /api/workflows/runs` |
+| **IP Management** | Subnets, assignments, ports | `GET /api/ip/subnets`, `/assignments`, `/ports` |
+| **Reports** | Historical analytics | `GET /api/reports/summary`, `/uptime`, `/bandwidth`, `/incidents` |
+| **WebSocket** | Real-time telemetry | `ws://host/ws` |
 
 ---
 
@@ -96,38 +127,58 @@ npm run dev   # http://localhost:3000
 
 ### 🗺️ Network Topology & Discovery
 - Visualizes device interconnections with an SVG-based network map
+- Hierarchical auto-layout computed from device types (router → firewall → core → distribution → access → server)
 - Color-coded health status (green/yellow/red)
 - Clickable device detail panel
 - Supports on-demand topology discovery
+
+### 🔗 Link & Circuit Monitoring
+- Per-link utilization bars, latency, and packet loss in **Link Monitor**
+- WAN/NTTN/ISP circuit status with SLA compliance coloring in **Circuit Status**
+- Real-time bandwidth charts per device in **Device Detail**
 
 ### 🛡️ Threat Detection & Security
 - Real-time detection of DDoS attacks, port scans, and unauthorized access attempts
 - ML-based anomaly detection using z-score, IQR, and EWMA
 - One-click mitigation with audit trail
-- Traffic anomaly timeline visualization
+- BGP route hijack detection with automatic alerting
 
 ### ⚙️ Configuration Management
 - GitOps-style config history with full audit trail
 - Compliance checking against enterprise policies
-- Apply and rollback configuration changes
-- Per-device config viewer
+- Apply and rollback configuration changes (wired to `POST /api/config/{id}/apply`)
+- Per-device config viewer with DEVICE_ID_MAP
 
 ### 💻 Device Health & Performance
 - Real-time CPU, memory, disk, and interface utilization
 - Time-series performance charts
 - Predictive failure analysis using trend data
-- Proactive health alerts
+- **Per-Device Dashboard** at `/devices/:id` with action buttons (Ping, SSH, Reboot, Backup, Audit, Upgrade)
 
 ### 🔄 Software Lifecycle Management
 - Firmware inventory across all devices
 - CVE vulnerability tracking
-- Staged upgrade scheduling with rollback support
+- Upgrade scheduling form wired to `POST /api/software/upgrade`
 - Compatibility validation
 
 ### 🤖 AI Assistant (ChatOps / NLP)
 - Natural language command interface
 - Example queries: *"show device health"*, *"check router configs"*, *"list active threats"*
-- Returns structured data and suggested remediation actions
+- Returns structured data and suggested remediation actions (navigate actions with `label` + `value`)
+
+### 📊 Reports & Analytics
+- Historical bandwidth utilization charts (24h)
+- Per-device uptime statistics (30 days)
+- Incident rollup report combining threats and alerts
+
+### 🔧 Workflow Automation
+- Built-in templates: backup configs, firmware audit, threat scan, compliance check, topology discovery
+- Run history with status tracking
+
+### 🌐 IP & Switch Port Management
+- Subnet utilization table with free/assigned counts
+- IP assignment tracking with VLAN and device info
+- Switch port inventory
 
 ---
 
@@ -151,7 +202,7 @@ netAI supports **8 network device vendors** out of the box:
 ```
 1. Scan subnet for SNMP / SSH / HTTP endpoints
 2. Query SNMP sysDescr (OID 1.3.6.1.2.1.1.1.0)
-3. Identify vendor via keyword fingerprinting
+3. Identify vendor via keyword fingerprinting (falls back to "unknown")
 4. Load VendorProfile (CLI commands, protocols)
 5. Pull config & health using vendor-specific commands
 6. Normalise into unified Device schema
@@ -172,9 +223,10 @@ See `GET /api/vendors` for the full list and `GET /api/vendors/{vendor_key}/capa
 | Frontend | React 18, TypeScript, Vite |
 | Charts | Recharts |
 | Icons | Lucide React |
-| HTTP Client | Axios |
-| Real-time | WebSocket |
+| HTTP Client | Axios (same-origin base URL) |
+| Real-time | WebSocket (auto-reconnect, unmount-safe) |
 | Containerization | Docker, Docker Compose |
+| Reverse Proxy | nginx (proxies `/api` and `/ws`) |
 | CI/CD | GitHub Actions |
 
 ---
@@ -189,9 +241,9 @@ Full interactive API documentation is available at **http://localhost:8000/docs*
 
 The GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push and pull request:
 
-1. **Backend**: Installs Python dependencies, validates imports, starts the server, and checks the health endpoint
-2. **Frontend**: Installs Node.js dependencies and runs a production build
-3. **Docker**: Validates the `docker-compose.yml` configuration
+1. **Backend — Import & Health Check**: Installs Python dependencies, validates imports, starts the server, and checks the health endpoint
+2. **Frontend — Build**: Installs Node.js dependencies and runs a production build
+3. **Docker — Validate**: Validates the `docker-compose.yml` configuration
 
 ---
 

@@ -17,26 +17,36 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
     const wsUrl = `${protocol}//${host}/ws`
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let disposed = false
 
     const connect = () => {
+      if (disposed) return
       try {
         ws = new WebSocket(wsUrl)
-        ws.onopen = () => setWsConnected(true)
-        ws.onerror = () => setWsConnected(false)
+        ws.onopen = () => { if (!disposed) setWsConnected(true) }
+        ws.onerror = () => { if (!disposed) setWsConnected(false) }
         ws.onclose = () => {
+          if (disposed) return
           setWsConnected(false)
-          // Reconnect after 5s
+          // Reconnect after 5s only if still mounted
           reconnectTimer = setTimeout(connect, 5000)
         }
       } catch {
-        setWsConnected(false)
+        if (!disposed) setWsConnected(false)
       }
     }
 
     connect()
     return () => {
+      disposed = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
-      ws?.close()
+      if (ws) {
+        // Remove handlers before closing to prevent onclose from scheduling a reconnect
+        ws.onopen = null
+        ws.onerror = null
+        ws.onclose = null
+        ws.close()
+      }
     }
   }, [])
 

@@ -123,7 +123,13 @@ const NLP: React.FC = () => {
         j % 2 === 1 ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{part}</strong> : part
       )
       if (line.startsWith('- ')) {
-        return <div key={i} style={{ paddingLeft: 12, display: 'flex', gap: 6 }}><span>•</span><span>{formatted.slice(1)}</span></div>
+        // Re-format the bullet content (without leading "- ") to preserve bold parts
+        const bulletText = line.slice(2)
+        const bulletParts = bulletText.split(/\*\*(.*?)\*\*/g)
+        const bulletFormatted = bulletParts.map((part, j) =>
+          j % 2 === 1 ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{part}</strong> : part
+        )
+        return <div key={i} style={{ paddingLeft: 12, display: 'flex', gap: 6 }}><span>•</span><span>{bulletFormatted}</span></div>
       }
       if (line.startsWith('|') && line.endsWith('|')) {
         const cells = line.split('|').filter(Boolean)

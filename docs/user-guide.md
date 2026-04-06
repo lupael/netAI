@@ -15,8 +15,15 @@
 7. [Software Lifecycle](#software-lifecycle)
 8. [Alerts Center](#alerts-center)
 9. [AI Assistant (ChatOps)](#ai-assistant-chatops)
-10. [Supported Vendors](#supported-vendors)
-11. [Troubleshooting](#troubleshooting)
+10. [Link Monitoring](#link-monitoring)
+11. [BGP Monitor](#bgp-monitor)
+12. [Circuit Status](#circuit-status)
+13. [Workflows](#workflows)
+14. [IP Management](#ip-management)
+15. [Reports & Analytics](#reports--analytics)
+16. [Per-Device Dashboard](#per-device-dashboard)
+17. [Supported Vendors](#supported-vendors)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -62,6 +69,12 @@ The left sidebar provides access to all modules:
 | 📦 | **Software** | Firmware inventory and upgrades |
 | 🔔 | **Alerts** | Unified alert center |
 | 🤖 | **AI Assistant** | Natural language network operations |
+| 🔗 | **Link Monitor** | Real-time link health and utilization |
+| 🔀 | **BGP Monitor** | BGP session management & hijack detection |
+| 🌐 | **Circuit Status** | WAN/NTTN/ISP circuit monitoring |
+| ⚡ | **Workflows** | Automated network management tasks |
+| 📍 | **IP Management** | IP address and VLAN management |
+| 📈 | **Reports** | Historical stats and analytics |
 
 The **connectivity indicator** in the top-right header shows whether the real-time WebSocket feed is active (🟢 Live) or offline (⚫ Offline).
 
@@ -379,6 +392,128 @@ The assistant returns structured responses with:
 | Software lifecycle | CVEs, pending updates, EOL |
 | Performance insights | CPU spikes, traffic anomalies |
 | Predictive analytics | Failure predictions |
+
+---
+
+## Link Monitoring
+
+Navigate to **Link Monitor** (`/links`) to view the health of all network links in real time.
+
+- **Utilization bars** — color-coded: green (<60%), orange (60-80%), red (>80%)
+- **Latency** — round-trip time in milliseconds per link
+- **Packet loss** — percentage of dropped packets
+- **Status badges** — Active / Degraded / Down
+
+Use this page to quickly identify bottlenecks before they cause outages.
+
+---
+
+## BGP Monitor
+
+Navigate to **BGP Monitor** (`/bgp`) for Border Gateway Protocol visibility.
+
+### BGP Sessions
+Shows all configured BGP peers with: peer IP, remote AS, local AS, state (Established/Idle/Connect), prefixes received/sent, and session uptime.
+
+### BGP Hijack Events
+Displays detected prefix hijacks with: affected prefix, expected origin AS, actual origin AS, severity, and detection time.
+
+**Resolving a Hijack**
+1. Review the hijack details in the event table
+2. Verify with your upstream provider
+3. Click **Resolve** to mark the event as investigated and resolved
+
+---
+
+## Circuit Status
+
+Navigate to **Circuit Status** (`/circuits`) to monitor your WAN, NTTN, and ISP circuits.
+
+- **SLA Compliance** — actual uptime vs. contracted SLA shown with color coding (green = SLA met, red = SLA breached)
+- **Utilization bar** — current throughput as a percentage of contracted bandwidth
+- **Circuit types** — NTTN, ISP, MPLS, Internet, P2P, Metro-E
+- **Provider info** — provider name and circuit reference ID
+
+Use this page to monitor NTTN link status and generate SLA breach reports.
+
+---
+
+## Workflows
+
+Navigate to **Workflows** (`/workflows`) to automate repetitive network management tasks.
+
+### Built-in Workflow Templates
+
+| Template | Description |
+|----------|-------------|
+| **Backup All Configs** | Backs up running configurations for all devices |
+| **Firmware Audit** | Checks all devices against known firmware vulnerabilities |
+| **Threat Scan** | Runs anomaly detection across all links and devices |
+| **Compliance Check** | Validates device configs against policy rules |
+| **Topology Discovery** | Scans subnets to discover new network devices |
+
+### Running a Workflow
+1. Browse the template cards
+2. Click **Run** on the desired template
+3. Monitor progress in the **Execution History** table
+
+---
+
+## IP Management
+
+Navigate to **IP Management** (`/ip-management`) for address space oversight.
+
+### Subnet Utilization
+Shows each IP subnet (CIDR), its description, total addresses, assigned count, free addresses, and a utilization bar.
+
+### IP Assignments
+Lists every assigned IP address with: IP, hostname, linked device, VLAN ID, and status (active/reserved/inactive).
+
+Use this page to find free IP ranges before provisioning new devices or to audit duplicate assignments.
+
+---
+
+## Reports & Analytics
+
+Navigate to **Reports** (`/reports`) for historical data analysis.
+
+### Summary Cards
+Key metrics at a glance: device availability %, average CPU utilization, average bandwidth usage.
+
+### Device Uptime Chart
+Bar chart showing 30-day uptime percentage per device. Devices below 99.9% SLA are highlighted in red.
+
+### Bandwidth Utilization Trend
+Line chart showing 24-hour bandwidth utilization (inbound + outbound) across the network.
+
+### Incident Report
+Rolled-up incident log combining threats and alerts with: date, type, severity, affected devices, and resolution time.
+
+---
+
+## Per-Device Dashboard
+
+From any device in the **Device Health** page, click **View Dashboard** to open the per-device dashboard at `/devices/:id`.
+
+### Metric Cards
+Real-time gauges for CPU%, Memory%, Disk%, and Temperature with color thresholds (green/orange/red).
+
+### Bandwidth Chart
+Live inbound/outbound bandwidth chart updating every 5 seconds via WebSocket.
+
+### Interface Table
+All interfaces with: name, IP address, MAC, speed, admin state, and link state.
+
+### Action Buttons
+
+| Button | Action |
+|--------|--------|
+| **Ping** | Test ICMP reachability from the netAI server |
+| **SSH** | Open SSH session (opens terminal command) |
+| **Reboot** | Schedule a controlled reboot |
+| **Config Backup** | Immediately back up the running configuration |
+| **Audit Config** | Run compliance audit against policy rules |
+| **Schedule Upgrade** | Open the firmware upgrade scheduler |
 
 ---
 

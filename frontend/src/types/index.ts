@@ -2,7 +2,16 @@
 
 export type DeviceStatus = 'healthy' | 'warning' | 'degraded' | 'down' | 'unknown'
 export type SeverityLevel = 'critical' | 'high' | 'medium' | 'low' | 'info'
-export type AlertType = 'threat' | 'config' | 'device' | 'traffic' | 'software' | 'system'
+/**
+ * AlertType values match the backend AlertType enum.
+ * Legacy frontend-only values (threat, config, device, traffic, software, system) are also
+ * kept for mock data compatibility.
+ */
+export type AlertType =
+  | 'cpu_high' | 'memory_high' | 'disk_high' | 'link_down' | 'device_offline'
+  | 'threat_detected' | 'config_drift' | 'latency_high' | 'packet_loss' | 'firmware_outdated'
+  // legacy frontend categories (mock data compatibility)
+  | 'threat' | 'config' | 'device' | 'traffic' | 'software' | 'system'
 
 export interface Device {
   id: string

@@ -5,6 +5,8 @@ import asyncio
 import json
 import logging
 import os
+import time as _time
+from collections import defaultdict as _defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -76,9 +78,6 @@ class _LimitBodySize(BaseHTTPMiddleware):
 # Simple in-memory rate limiter middleware
 # Limits: 30 req/min on /api/nlp/query, 10 req/min on /api/auth/login
 # ---------------------------------------------------------------------------
-
-import time as _time
-from collections import defaultdict as _defaultdict
 
 _rate_windows: dict = _defaultdict(list)
 _RATE_LIMITS = {

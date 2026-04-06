@@ -98,13 +98,13 @@ Priority levels: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - [x] **API-003** — Add `PUT /api/devices/{id}` endpoint for device metadata updates
   - File: `backend/app/api/routes/devices.py`
 
-- [ ] **API-004** — Add `GET /api/devices?search=&type=&status=` filtering
+- [x] **API-004** — Add `GET /api/devices?search=&type=&status=` filtering
   - File: `backend/app/api/routes/devices.py`
 
-- [ ] **API-005** — Add `GET /api/audit-log` endpoint for config change history
-  - File: `backend/app/api/routes/config_mgmt.py` or new `audit.py`
+- [x] **API-005** — Add `GET /api/audit-log` endpoint for config change history
+  - File: `backend/app/api/routes/audit.py`
 
-- [ ] **MONITORING-001** — Add Prometheus metrics endpoint to backend
+- [x] **MONITORING-001** — Add Prometheus metrics endpoint to backend
   - Package: `prometheus-fastapi-instrumentator`
   - Expose at `/metrics`
 
@@ -150,8 +150,8 @@ Priority levels: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - [ ] **INFRA-002** — Add TLS configuration example to `nginx.conf`
   - Show Let's Encrypt / Certbot integration
 
-- [ ] **INFRA-003** — Add `VITE_API_BASE_URL` environment variable support
-  - Current: Uses relative paths; hard to point at a remote backend
+- [x] **INFRA-003** — Add `VITE_API_BASE_URL` environment variable support
+  - Implemented as `VITE_API_URL` in `frontend/src/api/client.ts`
 
 - [x] **SECURITY-001** — Add rate limiting to NLP and auth endpoints
   - Package: `slowapi` (FastAPI wrapper for `limits`)

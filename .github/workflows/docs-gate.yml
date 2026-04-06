@@ -1,0 +1,129 @@
+name: Docs Gate
+
+# Enforce:
+#   1. All documentation lives under docs/ only
+#   2. Every PR must include at least one docs/ change
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Job 1: Verify no .md files were added outside docs/ (except README.md)
+  # -------------------------------------------------------------------------
+  no-docs-outside-docs-folder:
+    name: No Markdown outside docs/
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect .md files added outside docs/
+        run: |
+          # List .md files changed/added in this PR that are NOT inside docs/ and NOT README.md
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          VIOLATIONS=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep '\.md$' \
+            | grep -v '^docs/' \
+            | grep -v '^README\.md$' \
+            || true)
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "❌ The following Markdown files were added or modified outside the docs/ folder:"
+            echo "$VIOLATIONS"
+            echo ""
+            echo "Rule: All project documentation MUST live under docs/"
+            echo "      (README.md is the only allowed exception)"
+            echo ""
+            echo "Please move the files to docs/ and update any relative links."
+            exit 1
+          fi
+
+          echo "✅ No Markdown files found outside docs/ — rule satisfied."
+
+  # -------------------------------------------------------------------------
+  # Job 2: Require at least one docs/ file change per PR
+  # -------------------------------------------------------------------------
+  docs-required-in-pr:
+    name: PR must include a docs/ change
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for docs/ changes
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          DOCS_CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep '^docs/' \
+            || true)
+
+          if [ -z "$DOCS_CHANGED" ]; then
+            echo "❌ This PR does not include any changes to the docs/ folder."
+            echo ""
+            echo "Rule: Every PR must document what changed."
+            echo ""
+            echo "Please update at least one of:"
+            echo "  docs/developer-guide.md   — for backend or infrastructure changes"
+            echo "  docs/user-guide.md        — for frontend feature changes"
+            echo "  docs/TODO.md              — for completed tasks or newly discovered items"
+            echo "  docs/ai-instructions.md   — for convention changes"
+            echo "  docs/investigation-report.md — for architectural findings"
+            echo ""
+            echo "See docs/ai-instructions.md for the full pre-PR checklist."
+            exit 1
+          fi
+
+          echo "✅ docs/ changes found in this PR:"
+          echo "$DOCS_CHANGED"
+
+  # -------------------------------------------------------------------------
+  # Job 3: Verify all files referenced in docs/ actually exist
+  # -------------------------------------------------------------------------
+  docs-links-valid:
+    name: Validate docs/ internal links
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that docs/ index files exist
+        run: |
+          REQUIRED_FILES=(
+            "docs/developer-guide.md"
+            "docs/user-guide.md"
+            "docs/TODO.md"
+            "docs/ai-instructions.md"
+          )
+
+          MISSING=()
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              MISSING+=("$f")
+            fi
+          done
+
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Required documentation files are missing:"
+            printf '  %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+
+          echo "✅ All required docs/ files exist."

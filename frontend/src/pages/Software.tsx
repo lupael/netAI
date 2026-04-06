@@ -84,7 +84,7 @@ const Software: React.FC = () => {
         device_id: d.device_id as string,
         hostname: scheduleDevice,
         target_version: d.target_version as string,
-        scheduled_at: d.scheduled_at as string ?? new Date(Date.now() + 3600000).toISOString(),
+        scheduled_at: (d.scheduled_at ?? new Date(Date.now() + 3600000).toISOString()) as string,
         status: (d.status as string ?? 'pending') as UpgradeJob['status'],
         progress_pct: 0,
       }

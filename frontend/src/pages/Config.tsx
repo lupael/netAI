@@ -24,10 +24,10 @@ const DEVICE_ID_MAP: Record<string, string> = {
 const MOCK_DEVICES = Object.keys(DEVICE_ID_MAP)
 
 const MOCK_CONFIGS: Record<string, DeviceConfig> = {
-  'core-sw-01': {
-    device_id: 'core-01',
-    hostname: 'core-sw-01',
-    config_text: `hostname core-sw-01
+  'core-router-01': {
+    device_id: 'dev-001',
+    hostname: 'core-router-01',
+    config_text: `hostname core-router-01
 !
 ip routing
 spanning-tree mode rapid-pvst
@@ -49,10 +49,10 @@ ip access-list extended DENY_TELNET
     compliance_status: 'compliant',
     violations: [],
   },
-  'dist-sw-02': {
-    device_id: 'dist-02',
-    hostname: 'dist-sw-02',
-    config_text: `hostname dist-sw-02
+  'dist-switch-02': {
+    device_id: 'dev-006',
+    hostname: 'dist-switch-02',
+    config_text: `hostname dist-switch-02
 !
 interface GigabitEthernet0/1
  description uplink-core-01
@@ -76,15 +76,15 @@ snmp-server community public RO
 }
 
 const MOCK_HISTORY: ConfigChange[] = [
-  { id: 'c1', device_id: 'core-01', hostname: 'core-sw-01', changed_by: 'admin', timestamp: new Date(Date.now() - 86400000).toISOString(), description: 'Added DENY_TELNET ACL', diff: '+ip access-list extended DENY_TELNET\n+ deny tcp any any eq 23\n+ permit ip any any' },
-  { id: 'c2', device_id: 'dist-02', hostname: 'dist-sw-02', changed_by: 'netops@domain.com', timestamp: new Date(Date.now() - 172800000).toISOString(), description: 'Changed spanning-tree mode', diff: '-spanning-tree mode pvst\n+spanning-tree mode rapid-pvst' },
-  { id: 'c3', device_id: 'core-02', hostname: 'core-sw-02', changed_by: 'automation', timestamp: new Date(Date.now() - 259200000).toISOString(), description: 'NTP server updated', diff: '-ntp server 10.0.0.200\n+ntp server 10.0.0.201' },
-  { id: 'c4', device_id: 'fw-01', hostname: 'firewall-01', changed_by: 'admin', timestamp: new Date(Date.now() - 432000000).toISOString(), description: 'New ingress ACL rule added', diff: '+ip access-list extended INBOUND\n+ permit tcp 10.0.0.0 0.0.255.255 any eq 443' },
+  { id: 'c1', device_id: 'dev-001', hostname: 'core-router-01', changed_by: 'admin', timestamp: new Date(Date.now() - 86400000).toISOString(), description: 'Added DENY_TELNET ACL', diff: '+ip access-list extended DENY_TELNET\n+ deny tcp any any eq 23\n+ permit ip any any' },
+  { id: 'c2', device_id: 'dev-006', hostname: 'dist-switch-02', changed_by: 'netops@domain.com', timestamp: new Date(Date.now() - 172800000).toISOString(), description: 'Changed spanning-tree mode', diff: '-spanning-tree mode pvst\n+spanning-tree mode rapid-pvst' },
+  { id: 'c3', device_id: 'dev-002', hostname: 'core-router-02', changed_by: 'automation', timestamp: new Date(Date.now() - 259200000).toISOString(), description: 'NTP server updated', diff: '-ntp server 10.0.0.200\n+ntp server 10.0.0.201' },
+  { id: 'c4', device_id: 'dev-007', hostname: 'fw-primary', changed_by: 'admin', timestamp: new Date(Date.now() - 432000000).toISOString(), description: 'New ingress ACL rule added', diff: '+ip access-list extended INBOUND\n+ permit tcp 10.0.0.0 0.0.255.255 any eq 443' },
 ]
 
 const Config: React.FC = () => {
-  const [selectedDevice, setSelectedDevice] = useState('core-sw-01')
-  const [config, setConfig] = useState<DeviceConfig | null>(MOCK_CONFIGS['core-sw-01'])
+  const [selectedDevice, setSelectedDevice] = useState('core-router-01')
+  const [config, setConfig] = useState<DeviceConfig | null>(MOCK_CONFIGS['core-router-01'])
   const [history] = useState<ConfigChange[]>(MOCK_HISTORY)
   const [loading, setLoading] = useState(false)
   const [auditing, setAuditing] = useState(false)

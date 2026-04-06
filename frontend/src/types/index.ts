@@ -60,8 +60,9 @@ export interface TopologyLink {
 }
 
 export interface Topology {
-  /** Backend field name. Also aliased as `nodes` for the SVG map. */
+  /** Backend returns `devices`; normalised to `nodes` for the SVG map. */
   devices?: TopologyNode[]
+  /** Frontend field — always populated after fetch normalisation. */
   nodes?: TopologyNode[]
   links: TopologyLink[]
   /** Backend field name */
@@ -102,9 +103,9 @@ export interface Alert {
   title: string
   message: string
   device_id?: string
-  /** Backend field; also used as device_hostname for display */
+  /** Backend field (`device_name`); populated from database */
   device_name?: string
-  /** Alias for device_name — kept for backward compatibility with mock data */
+  /** Frontend display field — set to `device_name` value after fetch normalisation */
   device_hostname?: string
   timestamp: string
   acknowledged: boolean

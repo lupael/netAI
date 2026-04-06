@@ -130,13 +130,17 @@ VENDOR_PROFILES: dict[str, VendorProfile] = {
 
 
 def identify_vendor(sys_descr: str) -> str:
-    """Return a vendor key by matching *sys_descr* against known keywords."""
+    """Return a vendor key by matching *sys_descr* against known keywords.
+
+    Returns ``"unknown"`` when no vendor can be identified — callers should
+    handle this gracefully rather than assuming a specific vendor.
+    """
     lower = sys_descr.lower()
     for key, profile in VENDOR_PROFILES.items():
         for kw in profile.identify_keywords:
             if kw in lower:
                 return key
-    return "cisco"
+    return "unknown"
 
 
 def get_vendor_profile(vendor_key: str) -> VendorProfile:

@@ -12,7 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import alerts, config_mgmt, devices, nlp, software, threats, topology
+from app.api.routes import alerts, config_mgmt, devices, nlp, software, threats, topology, vendors
 
 logger = logging.getLogger("netai")
 
@@ -115,11 +115,12 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow all origins in development; tighten in production
+# CORS — credentials are not used, so wildcard origins are safe here.
+# In production, restrict allow_origins to your frontend domain.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -135,6 +136,7 @@ app.include_router(devices.router)
 app.include_router(software.router)
 app.include_router(alerts.router)
 app.include_router(nlp.router)
+app.include_router(vendors.router)
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +170,38 @@ async def health_check():
         "devices": len(db.devices_db),
         "active_threats": sum(1 for t in db.threats_db if t.status.value in ("active", "investigating")),
         "unacked_alerts": sum(1 for a in db.alerts_db if not a.acknowledged),
+    }
+
+
+@app.get("/api/dashboard/kpi", tags=["system"])
+async def dashboard_kpi():
+    """Return KPI summary for the dashboard."""
+    from app.core import database as db
+    active_devices = sum(1 for d in db.devices_db if d.status.value in ("online", "degraded"))
+    active_threats = sum(1 for t in db.threats_db if t.status.value in ("active", "investigating"))
+    config_issues = sum(
+        1 for c in db.config_changes_db
+        if c.status.value == "applied" and c.compliance is False
+    )
+    pending_updates = sum(
+        1 for u in db.software_updates_db
+        if u.status.value in ("pending", "scheduled")
+    )
+    critical_alerts = sum(
+        1 for a in db.alerts_db
+        if not a.acknowledged and a.severity.value == "critical"
+    )
+    # Simple health score: 100 - (active_threats * 5) - (config_issues * 3) - (not-online devices * 2)
+    offline = len(db.devices_db) - active_devices
+    health_score = max(0, min(100, 100 - active_threats * 5 - config_issues * 3 - offline * 2))
+    return {
+        "total_devices": len(db.devices_db),
+        "active_devices": active_devices,
+        "active_threats": active_threats,
+        "config_issues": config_issues,
+        "pending_updates": pending_updates,
+        "critical_alerts": critical_alerts,
+        "network_health_score": health_score,
     }
 
 

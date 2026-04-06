@@ -23,6 +23,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./netai.db")
+# Expected formats:
+#   SQLite (development):   sqlite:///./netai.db  or  sqlite:////abs/path/netai.db
+#   PostgreSQL (production): postgresql://user:password@host:5432/dbname
 
 engine = create_engine(
     DATABASE_URL,

@@ -62,7 +62,7 @@ manager = ConnectionManager()
 # Request body size limit middleware (1 MB)
 # ---------------------------------------------------------------------------
 
-class _LimitBodySize(BaseHTTPMiddleware):
+class LimitBodySizeMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, max_bytes: int = 1_048_576) -> None:
         super().__init__(app)
         self.max_bytes = max_bytes
@@ -86,7 +86,7 @@ _RATE_LIMITS = {
 }
 
 
-class _PathRateLimit(BaseHTTPMiddleware):
+class PathRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         if path in _RATE_LIMITS:
@@ -191,9 +191,9 @@ app.add_middleware(
 )
 
 # Request body size limit (1 MB)
-app.add_middleware(_LimitBodySize, max_bytes=1_048_576)
+app.add_middleware(LimitBodySizeMiddleware, max_bytes=1_048_576)
 # Path-level rate limiting (30/min NLP, 10/min auth)
-app.add_middleware(_PathRateLimit)
+app.add_middleware(PathRateLimitMiddleware)
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — exposes /metrics endpoint

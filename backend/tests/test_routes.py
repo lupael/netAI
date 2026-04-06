@@ -95,12 +95,14 @@ def test_put_device_requires_auth(client: TestClient) -> None:
 
 
 def test_put_device_with_auth(client: TestClient, auth_headers: dict) -> None:
+    # dev-001 is seeded in the in-memory database
     response = client.put(
         "/api/devices/dev-001",
         json={"location": "Test Location"},
         headers=auth_headers,
     )
-    assert response.status_code in (200, 404)
+    assert response.status_code == 200
+    assert response.json()["location"] == "Test Location"
 
 
 # ---------------------------------------------------------------------------

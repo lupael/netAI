@@ -81,7 +81,7 @@ const Config: React.FC = () => {
   // Fetch device list and build hostname → id map
   useEffect(() => {
     client
-      .get<{ id: string; name: string }[]>('/api/devices')
+      .get<{ id: string; name: string; ip: string; type: string; status: string }[]>('/api/devices')
       .then((res) => {
         const names = res.data.map((d) => d.name)
         const map: Record<string, string> = {}

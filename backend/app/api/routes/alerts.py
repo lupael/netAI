@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.core import database as db
 from app.core.auth import get_current_user
@@ -13,7 +13,10 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 
 @router.get("", summary="List all alerts")
-async def get_all_alerts(skip: int = 0, limit: int = 50):
+async def get_all_alerts(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+):
     """Return paginated alerts, newest first."""
     alerts = sorted(db.alerts_db, key=lambda a: a.timestamp, reverse=True)
     return alerts[skip : skip + limit]

@@ -78,7 +78,34 @@ class LimitBodySizeMiddleware(BaseHTTPMiddleware):
                 return Response(status_code=400, content="Content-Length cannot be negative")
             if parsed > self.max_bytes:
                 return Response(status_code=413, content="Request body too large")
-        return await call_next(request)
+
+        # Also enforce the limit while streaming the body so that chunked
+        # transfers (or forged/missing Content-Length) cannot bypass the cap.
+        received = 0
+        body_too_large = False
+        original_receive = request._receive  # type: ignore[attr-defined]
+
+        async def limited_receive() -> dict:
+            nonlocal received, body_too_large
+            message = await original_receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    body_too_large = True
+            return message
+
+        request._receive = limited_receive  # type: ignore[attr-defined]
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            if body_too_large:
+                return Response(status_code=413, content="Request body too large")
+            raise
+
+        if body_too_large:
+            return Response(status_code=413, content="Request body too large")
+        return response
 
 
 # ---------------------------------------------------------------------------

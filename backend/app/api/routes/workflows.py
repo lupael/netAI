@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import get_current_user
 
@@ -130,14 +130,20 @@ _WORKFLOW_RUNS: List[Dict[str, Any]] = [
 
 
 @router.get("")
-async def get_workflows(skip: int = 0, limit: int = 50) -> Dict[str, Any]:
+async def get_workflows(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> Dict[str, Any]:
     """Return paginated workflow templates and full recent run history."""
     templates = _WORKFLOW_TEMPLATES[skip : skip + limit]
     return {"templates": templates, "recent_runs": _WORKFLOW_RUNS}
 
 
 @router.get("/runs")
-async def get_workflow_runs(skip: int = 0, limit: int = 50) -> List[Dict[str, Any]]:
+async def get_workflow_runs(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> List[Dict[str, Any]]:
     """Return recent workflow execution history (paginated)."""
     runs = sorted(_WORKFLOW_RUNS, key=lambda r: r["started_at"], reverse=True)
     return runs[skip : skip + limit]

@@ -1,7 +1,7 @@
 """Threat detection routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import get_current_user
 from app.core.models import ThreatStats
@@ -11,14 +11,20 @@ router = APIRouter(prefix="/api/threats", tags=["threats"])
 
 
 @router.get("", summary="List all threats")
-async def get_all_threats(skip: int = 0, limit: int = 50):
+async def get_all_threats(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+):
     """Return paginated threat alerts."""
     threats = threat_service.get_all_threats()
     return threats[skip : skip + limit]
 
 
 @router.get("/active", summary="List active threats")
-async def get_active_threats(skip: int = 0, limit: int = 50):
+async def get_active_threats(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+):
     """Return paginated active and investigating threats."""
     threats = threat_service.get_active_threats()
     return threats[skip : skip + limit]

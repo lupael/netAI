@@ -90,8 +90,9 @@ const Config: React.FC = () => {
         res.data.forEach((d) => { map[d.name] = d.id })
         setDeviceNames(names.length > 0 ? names : Object.keys(MOCK_CONFIGS))
         setDeviceIdMap(map)
-        if (names.length > 0 && !names.includes(selectedDevice)) {
-          setSelectedDevice(names[0])
+        if (names.length > 0) {
+          // Use functional update to avoid capturing a stale selectedDevice value
+          setSelectedDevice(prev => names.includes(prev) ? prev : names[0])
         }
       })
       .catch(() => {

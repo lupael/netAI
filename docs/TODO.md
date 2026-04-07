@@ -188,7 +188,7 @@ Priority levels: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
 - [x] **API-004** — Device filtering by `search`, `type`, `status`
 - [x] **API-005** — `GET /api/audit-log` (paginated config change log)
 - [x] **MONITORING-001** — Prometheus metrics via `prometheus-fastapi-instrumentator`
-- [x] **SECURITY-001** — Rate limiting via `slowapi` (30 req/min NLP, 10 req/min auth)
+- [x] **SECURITY-001** — Rate limiting via custom `PathRateLimitMiddleware` (30 req/min NLP, 10 req/min auth)
 - [x] **SECURITY-002** — Request body size limit middleware (1 MB)
 - [x] **TEST-001** — Unit tests: `test_device_service.py`, `test_nlp_service.py`
 - [x] **TEST-002** — FastAPI integration tests: `test_routes.py`

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user
@@ -25,8 +25,8 @@ class DeviceUpdate(BaseModel):
 
 @router.get("", summary="List all devices")
 async def get_all_devices(
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
     search: str = "",
     type: str = "",
     status: str = "",

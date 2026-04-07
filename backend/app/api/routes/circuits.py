@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/api/circuits", tags=["circuits"])
 
@@ -95,10 +95,13 @@ _CIRCUITS: List[Dict[str, Any]] = [
 ]
 
 
-@router.get("")
-async def get_circuits() -> List[Dict[str, Any]]:
-    """List all WAN/NTTN/ISP circuits."""
-    return _CIRCUITS
+@router.get("", summary="List all circuits")
+async def get_circuits(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> List[Dict[str, Any]]:
+    """List all WAN/NTTN/ISP circuits (paginated)."""
+    return _CIRCUITS[skip : skip + limit]
 
 
 @router.get("/{circuit_id}")

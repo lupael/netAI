@@ -11,16 +11,24 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
   const [wsConnected, setWsConnected] = useState(false)
 
   useEffect(() => {
-    // Connect to backend WebSocket using relative path to work across environments
+    // Connect to backend WebSocket with JWT token authentication.
+    // Retries every 3 s when no token is present yet (e.g. user hasn't logged in)
+    // and also reconnects when a token is written from another tab (storage event).
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = import.meta.env.VITE_WS_HOST ?? window.location.host
-    const wsUrl = `${protocol}//${host}/ws`
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
 
     const connect = () => {
       if (disposed) return
+      const token = localStorage.getItem('netai_token')
+      if (!token) {
+        // No token yet — retry after 3 s (e.g. waiting for user to log in)
+        reconnectTimer = setTimeout(connect, 3000)
+        return
+      }
+      const wsUrl = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
       try {
         ws = new WebSocket(wsUrl)
         ws.onopen = () => { if (!disposed) setWsConnected(true) }
@@ -28,17 +36,28 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
         ws.onclose = () => {
           if (disposed) return
           setWsConnected(false)
-          // Reconnect after 5s only if still mounted
+          // Reconnect after 5 s only if still mounted
           reconnectTimer = setTimeout(connect, 5000)
         }
       } catch {
         if (!disposed) setWsConnected(false)
+        reconnectTimer = setTimeout(connect, 5000)
       }
     }
 
+    // Listen for token written from another tab (cross-tab storage event)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'netai_token' && e.newValue && (!ws || ws.readyState === WebSocket.CLOSED)) {
+        if (reconnectTimer) clearTimeout(reconnectTimer)
+        connect()
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
     connect()
     return () => {
       disposed = true
+      window.removeEventListener('storage', handleStorage)
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (ws) {
         // Remove handlers before closing to prevent onclose from scheduling a reconnect

@@ -4,15 +4,25 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import time as _time
+from collections import defaultdict as _defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_fastapi_instrumentator import Instrumentator
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.api.routes import alerts, bgp, circuits, config_mgmt, devices, ip_management, links, nlp, reports, software, threats, topology, vendors, workflows
+from app.api.routes import (
+    alerts, bgp, circuits, config_mgmt, devices, ip_management,
+    links, nlp, reports, software, threats, topology, vendors, workflows,
+)
+from app.api.routes import audit, auth
+from app.core.auth import decode_token
 
 logger = logging.getLogger("netai")
 
@@ -46,6 +56,137 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+# ---------------------------------------------------------------------------
+# Request body size limit middleware (1 MB)
+# Implemented as a pure ASGI middleware so the receive callable can be wrapped
+# directly without mutating Request's private attributes.
+# ---------------------------------------------------------------------------
+
+class LimitBodySizeMiddleware:
+    """ASGI middleware that enforces a maximum request body size."""
+
+    def __init__(self, app, max_bytes: int = 1_048_576) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Validate Content-Length header when present
+        headers = {k.lower(): v for k, v in scope.get("headers", [])}
+        raw_cl = headers.get(b"content-length")
+        if raw_cl is not None:
+            try:
+                parsed = int(raw_cl.decode())
+            except (ValueError, UnicodeDecodeError):
+                response = Response(status_code=400, content="Content-Length must be a valid number")
+                await response(scope, receive, send)
+                return
+            if parsed < 0:
+                response = Response(status_code=400, content="Content-Length cannot be negative")
+                await response(scope, receive, send)
+                return
+            if parsed > self.max_bytes:
+                response = Response(status_code=413, content="Request body too large")
+                await response(scope, receive, send)
+                return
+
+        # Also enforce the cap while the body is streamed so that chunked
+        # transfers (or forged/missing Content-Length) cannot bypass it.
+        received = 0
+
+        async def limited_receive() -> dict:
+            nonlocal received
+            message = await receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_bytes:
+                    raise _BodyTooLargeError()
+            return message
+
+        try:
+            await self.app(scope, limited_receive, send)
+        except _BodyTooLargeError:
+            response = Response(status_code=413, content="Request body too large")
+            await response(scope, receive, send)
+
+
+class _BodyTooLargeError(Exception):
+    """Raised internally when streaming body exceeds the configured limit."""
+
+
+# ---------------------------------------------------------------------------
+# Simple in-memory rate limiter middleware
+# Limits: 30 req/min on /api/nlp/query, 10 req/min on /api/auth/login
+# ---------------------------------------------------------------------------
+
+_rate_windows: dict = _defaultdict(list)
+_rate_window_last_seen: dict = {}
+_rate_lock = asyncio.Lock()
+_RATE_LIMITS = {
+    "/api/nlp/query": (30, 60),
+    "/api/auth/login": (10, 60),
+}
+_RATE_LIMIT_MAX_KEYS = 10_000
+_RATE_LIMIT_MAX_WINDOW = max(w for _, w in _RATE_LIMITS.values())
+_rate_request_count = 0
+_RATE_CLEANUP_INTERVAL = 256
+
+
+def _cleanup_rate_windows(now: float) -> None:
+    """Evict stale and excess entries from the rate-limit window dict.
+
+    A key is stale when its timestamp list is empty (all entries expired)
+    *and* no request has been seen for at least one full rate-limit window —
+    both checks are needed so we don't prematurely remove a key that was
+    just written but hasn't been seen yet after the last window expiry.
+    """
+    stale = [
+        key for key, timestamps in list(_rate_windows.items())
+        # Empty list means all timestamps have expired; only remove if the key
+        # has also been idle for at least one window to avoid a race with
+        # concurrent writers that just cleared the list.
+        if not timestamps and now - _rate_window_last_seen.get(key, 0.0) >= _RATE_LIMIT_MAX_WINDOW
+    ]
+    for key in stale:
+        _rate_windows.pop(key, None)
+        _rate_window_last_seen.pop(key, None)
+
+    overflow = len(_rate_windows) - _RATE_LIMIT_MAX_KEYS
+    if overflow > 0:
+        oldest = sorted(_rate_window_last_seen.items(), key=lambda x: x[1])[:overflow]
+        for key, _ in oldest:
+            _rate_windows.pop(key, None)
+            _rate_window_last_seen.pop(key, None)
+
+
+class PathRateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        global _rate_request_count
+        path = request.url.path
+        if path in _RATE_LIMITS:
+            max_calls, window = _RATE_LIMITS[path]
+            client_ip = (request.client.host if request.client else "unknown")
+            key = f"{client_ip}:{path}"
+            now = _time.monotonic()
+            async with _rate_lock:
+                _rate_request_count += 1
+                if _rate_request_count % _RATE_CLEANUP_INTERVAL == 0:
+                    _cleanup_rate_windows(now)
+                _rate_windows[key] = [t for t in _rate_windows[key] if now - t < window]
+                _rate_window_last_seen[key] = now
+                if len(_rate_windows[key]) >= max_calls:
+                    return Response(
+                        status_code=429,
+                        content="Too Many Requests",
+                        headers={"Retry-After": str(window)},
+                    )
+                _rate_windows[key].append(now)
+        return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
@@ -116,15 +257,32 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — credentials are not used, so wildcard origins are safe here.
-# In production, restrict allow_origins to your frontend domain.
+# ---------------------------------------------------------------------------
+# CORS — origins configurable via ALLOWED_ORIGINS env var (comma-separated)
+# ---------------------------------------------------------------------------
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "")
+_origins = (
+    [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    if _raw_origins
+    else ["*"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request body size limit (1 MB)
+app.add_middleware(LimitBodySizeMiddleware, max_bytes=1_048_576)
+# Path-level rate limiting (30/min NLP, 10/min auth)
+app.add_middleware(PathRateLimitMiddleware)
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics — exposes /metrics endpoint
+# ---------------------------------------------------------------------------
+Instrumentator().instrument(app).expose(app)
 
 # ---------------------------------------------------------------------------
 # Mount routers
@@ -144,6 +302,8 @@ app.include_router(workflows.router)
 app.include_router(ip_management.router)
 app.include_router(links.router)
 app.include_router(reports.router)
+app.include_router(auth.router)
+app.include_router(audit.router)
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +311,24 @@ app.include_router(reports.router)
 # ---------------------------------------------------------------------------
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(default=None),
+):
+    """WebSocket endpoint for real-time telemetry.
+
+    Requires a valid JWT token via the ``?token=<jwt>`` query parameter.
+    Connections without a token or with an invalid/expired token are rejected
+    with close code 1008 (Policy Violation).
+    """
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        decode_token(token)
+    except Exception:
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket)
     try:
         while True:

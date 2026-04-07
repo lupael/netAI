@@ -7,22 +7,6 @@ import type { DeviceConfig, ConfigChange } from '../types'
 import { Play, RefreshCw, FileText, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 
-// Hostname → backend device_id mapping for the Config page
-const DEVICE_ID_MAP: Record<string, string> = {
-  'core-router-01': 'dev-001',
-  'core-router-02': 'dev-002',
-  'edge-router-01': 'dev-003',
-  'edge-router-02': 'dev-004',
-  'dist-switch-01': 'dev-005',
-  'dist-switch-02': 'dev-006',
-  'fw-primary':     'dev-007',
-  'fw-secondary':   'dev-008',
-  'web-server-01':  'dev-009',
-  'db-server-01':   'dev-010',
-}
-
-const MOCK_DEVICES = Object.keys(DEVICE_ID_MAP)
-
 const MOCK_CONFIGS: Record<string, DeviceConfig> = {
   'core-router-01': {
     device_id: 'dev-001',
@@ -90,11 +74,42 @@ const Config: React.FC = () => {
   const [auditing, setAuditing] = useState(false)
   const [applying, setApplying] = useState(false)
 
-  const fetchConfig = useCallback(async (hostname: string) => {
+  // Device list and id-map fetched from the backend
+  const [deviceNames, setDeviceNames] = useState<string[]>(Object.keys(MOCK_CONFIGS))
+  const [deviceIdMap, setDeviceIdMap] = useState<Record<string, string>>({})
+  // Track whether the device map has finished loading so we don't fire premature API calls
+  const [mapReady, setMapReady] = useState(false)
+
+  // Fetch device list and build hostname → id map
+  useEffect(() => {
+    client
+      .get<{ id: string; name: string; ip: string; type: string; status: string }[]>('/api/devices')
+      .then((res) => {
+        const names = res.data.map((d) => d.name)
+        const map: Record<string, string> = {}
+        res.data.forEach((d) => { map[d.name] = d.id })
+        setDeviceNames(names.length > 0 ? names : Object.keys(MOCK_CONFIGS))
+        setDeviceIdMap(map)
+        if (names.length > 0) {
+          // Use functional update to avoid capturing a stale selectedDevice value
+          setSelectedDevice(prev => names.includes(prev) ? prev : names[0])
+        }
+      })
+      .catch(() => {
+        // Fall back to static list derived from MOCK_CONFIGS
+        setDeviceNames(Object.keys(MOCK_CONFIGS))
+      })
+      .finally(() => setMapReady(true))
+  }, [])
+
+  // fetchConfig receives idMap as an explicit parameter so the callback stays
+  // stable across renders (empty deps array). This avoids a stale-closure
+  // problem where the callback captured an empty idMap on first render.
+  const fetchConfig = useCallback(async (hostname: string, idMap: Record<string, string>) => {
     setLoading(true)
     try {
-      // Backend uses device_id, not hostname
-      const deviceId = DEVICE_ID_MAP[hostname] ?? hostname
+      // Use dynamic id map from API; fall back to hostname directly
+      const deviceId = idMap[hostname] ?? hostname
       const res = await client.get<{ device_id: string; config: string }>(`/api/config/${deviceId}`)
       // Adapt backend { device_id, config } to DeviceConfig shape
       setConfig({
@@ -113,12 +128,18 @@ const Config: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => { void fetchConfig(selectedDevice) }, [selectedDevice, fetchConfig])
+  // Only trigger config fetch once the device-id map is ready to avoid 404s
+  useEffect(() => {
+    if (mapReady) {
+      void fetchConfig(selectedDevice, deviceIdMap)
+    }
+  }, [selectedDevice, mapReady, fetchConfig, deviceIdMap])
 
   const handleAudit = async () => {
+    if (!mapReady) return
     setAuditing(true)
     try {
-      const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+      const deviceId = deviceIdMap[selectedDevice] ?? selectedDevice
       const res = await client.post<{ compliant: boolean; issues: string[]; recommendations: string[]; score: number }>(`/api/config/${deviceId}/audit`)
       // Update config compliance status from audit result
       if (config) {
@@ -140,10 +161,11 @@ const Config: React.FC = () => {
   }
 
   const handleApply = async () => {
+    if (!mapReady) return
     setApplying(true)
     try {
       if (config?.config_text) {
-        const deviceId = DEVICE_ID_MAP[selectedDevice] ?? selectedDevice
+        const deviceId = deviceIdMap[selectedDevice] ?? selectedDevice
         await client.post(`/api/config/${deviceId}/apply`, {
           change_type: 'interface_change',
           new_config: config.config_text,
@@ -168,11 +190,11 @@ const Config: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p className="card-title" style={{ marginBottom: 0 }}>Device Configuration</p>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => void handleAudit()} disabled={auditing} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => void handleAudit()} disabled={auditing || !mapReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <RefreshCw size={13} className={auditing ? 'spinning' : ''} />
                   {auditing ? 'Auditing…' : 'Audit'}
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={() => void handleApply()} disabled={applying} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => void handleApply()} disabled={applying || !mapReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Play size={13} />
                   {applying ? 'Applying…' : 'Apply'}
                 </button>
@@ -186,7 +208,7 @@ const Config: React.FC = () => {
                 value={selectedDevice}
                 onChange={(e) => setSelectedDevice(e.target.value)}
               >
-                {MOCK_DEVICES.map((d) => (
+              {deviceNames.map((d) => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -215,7 +237,7 @@ const Config: React.FC = () => {
             <p className="card-title">Compliance Status</p>
 
             {/* All devices compliance summary */}
-            {MOCK_DEVICES.map((hostname) => {
+            {deviceNames.map((hostname) => {
               const cfg = MOCK_CONFIGS[hostname]
               const status = cfg?.compliance_status ?? 'unknown'
               const violations = cfg?.violations?.length ?? 0

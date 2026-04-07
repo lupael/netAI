@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/api/bgp", tags=["bgp"])
 
@@ -120,10 +120,13 @@ _BGP_HIJACKS: List[Dict[str, Any]] = [
 ]
 
 
-@router.get("/sessions")
-async def get_bgp_sessions() -> List[Dict[str, Any]]:
-    """List all BGP sessions."""
-    return _BGP_SESSIONS
+@router.get("/sessions", summary="List BGP sessions")
+async def get_bgp_sessions(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> List[Dict[str, Any]]:
+    """List all BGP sessions (paginated)."""
+    return _BGP_SESSIONS[skip : skip + limit]
 
 
 @router.get("/hijacks")

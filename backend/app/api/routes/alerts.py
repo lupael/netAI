@@ -3,21 +3,26 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.core import database as db
+from app.core.auth import get_current_user
 from app.core.models import Alert, AlertStats, ThreatSeverity
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 
-@router.get("")
-async def get_all_alerts():
-    """Return all alerts, newest first."""
-    return sorted(db.alerts_db, key=lambda a: a.timestamp, reverse=True)
+@router.get("", summary="List all alerts")
+async def get_all_alerts(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+):
+    """Return paginated alerts, newest first."""
+    alerts = sorted(db.alerts_db, key=lambda a: a.timestamp, reverse=True)
+    return alerts[skip : skip + limit]
 
 
-@router.get("/stats", response_model=AlertStats)
+@router.get("/stats", response_model=AlertStats, summary="Get alert statistics")
 async def get_alert_stats():
     """Return aggregate alert statistics."""
     alerts = db.alerts_db
@@ -35,12 +40,18 @@ async def get_alert_stats():
     )
 
 
-@router.post("/{alert_id}/acknowledge", response_model=Alert)
+@router.post(
+    "/{alert_id}/acknowledge",
+    response_model=Alert,
+    summary="Acknowledge an alert",
+    responses={401: {"description": "Not authenticated"}, 404: {"description": "Alert not found"}},
+)
 async def acknowledge_alert(
     alert_id: str,
     acknowledged_by: str = Body("noc-operator", embed=True),
+    _: str = Depends(get_current_user),
 ):
-    """Acknowledge an alert."""
+    """Acknowledge an alert by ID."""
     for i, alert in enumerate(db.alerts_db):
         if alert.id == alert_id:
             db.alerts_db[i] = alert.model_copy(
@@ -51,4 +62,19 @@ async def acknowledge_alert(
                 }
             )
             return db.alerts_db[i]
+    raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
+
+
+@router.delete(
+    "/{alert_id}",
+    status_code=204,
+    summary="Delete an alert",
+    responses={401: {"description": "Not authenticated"}, 404: {"description": "Alert not found"}},
+)
+async def delete_alert(alert_id: str, _: str = Depends(get_current_user)):
+    """Permanently delete an alert by ID."""
+    for i, alert in enumerate(db.alerts_db):
+        if alert.id == alert_id:
+            db.alerts_db.pop(i)
+            return
     raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")

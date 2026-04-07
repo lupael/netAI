@@ -1,17 +1,20 @@
 """Links monitoring routes."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.core import database as db
 
 router = APIRouter(prefix="/api/links", tags=["links"])
 
 
-@router.get("")
-async def get_all_links():
-    """Return all network links with status, utilization, latency, bandwidth."""
-    return db.links_db
+@router.get("", summary="List all network links")
+async def get_all_links(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+):
+    """Return paginated network links with status, utilization, latency, bandwidth."""
+    return db.links_db[skip : skip + limit]
 
 
 @router.get("/stats")

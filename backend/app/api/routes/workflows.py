@@ -4,7 +4,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.core.auth import get_current_user
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -128,19 +130,30 @@ _WORKFLOW_RUNS: List[Dict[str, Any]] = [
 
 
 @router.get("")
-async def get_workflows() -> Dict[str, Any]:
-    """Return workflow templates and recent run history."""
-    return {"templates": _WORKFLOW_TEMPLATES, "recent_runs": _WORKFLOW_RUNS}
+async def get_workflows(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> Dict[str, Any]:
+    """Return paginated workflow templates and full recent run history."""
+    templates = _WORKFLOW_TEMPLATES[skip : skip + limit]
+    return {"templates": templates, "recent_runs": _WORKFLOW_RUNS}
 
 
 @router.get("/runs")
-async def get_workflow_runs() -> List[Dict[str, Any]]:
-    """Return recent workflow execution history."""
-    return sorted(_WORKFLOW_RUNS, key=lambda r: r["started_at"], reverse=True)
+async def get_workflow_runs(
+    skip: int = Query(default=0, ge=0, description="Number of records to skip"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Maximum records to return"),
+) -> List[Dict[str, Any]]:
+    """Return recent workflow execution history (paginated)."""
+    runs = sorted(_WORKFLOW_RUNS, key=lambda r: r["started_at"], reverse=True)
+    return runs[skip : skip + limit]
 
 
 @router.post("/{workflow_id}/run")
-async def trigger_workflow(workflow_id: str) -> Dict[str, Any]:
+async def trigger_workflow(
+    workflow_id: str,
+    _: str = Depends(get_current_user),
+) -> Dict[str, Any]:
     """Trigger a workflow by ID."""
     template = next((t for t in _WORKFLOW_TEMPLATES if t["id"] == workflow_id), None)
     if not template:

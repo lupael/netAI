@@ -60,52 +60,63 @@ manager = ConnectionManager()
 
 # ---------------------------------------------------------------------------
 # Request body size limit middleware (1 MB)
+# Implemented as a pure ASGI middleware so the receive callable can be wrapped
+# directly without mutating Request's private attributes.
 # ---------------------------------------------------------------------------
 
-class LimitBodySizeMiddleware(BaseHTTPMiddleware):
+class LimitBodySizeMiddleware:
+    """ASGI middleware that enforces a maximum request body size."""
+
     def __init__(self, app, max_bytes: int = 1_048_576) -> None:
-        super().__init__(app)
+        self.app = app
         self.max_bytes = max_bytes
 
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                parsed = int(content_length)
-            except (TypeError, ValueError):
-                return Response(status_code=400, content="Content-Length must be a valid number")
-            if parsed < 0:
-                return Response(status_code=400, content="Content-Length cannot be negative")
-            if parsed > self.max_bytes:
-                return Response(status_code=413, content="Request body too large")
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # Also enforce the limit while streaming the body so that chunked
-        # transfers (or forged/missing Content-Length) cannot bypass the cap.
+        # Validate Content-Length header when present
+        headers = {k.lower(): v for k, v in scope.get("headers", [])}
+        raw_cl = headers.get(b"content-length")
+        if raw_cl is not None:
+            try:
+                parsed = int(raw_cl.decode())
+            except (ValueError, UnicodeDecodeError):
+                response = Response(status_code=400, content="Content-Length must be a valid number")
+                await response(scope, receive, send)
+                return
+            if parsed < 0:
+                response = Response(status_code=400, content="Content-Length cannot be negative")
+                await response(scope, receive, send)
+                return
+            if parsed > self.max_bytes:
+                response = Response(status_code=413, content="Request body too large")
+                await response(scope, receive, send)
+                return
+
+        # Also enforce the cap while the body is streamed so that chunked
+        # transfers (or forged/missing Content-Length) cannot bypass it.
         received = 0
-        body_too_large = False
-        original_receive = request._receive  # type: ignore[attr-defined]
 
         async def limited_receive() -> dict:
-            nonlocal received, body_too_large
-            message = await original_receive()
+            nonlocal received
+            message = await receive()
             if message.get("type") == "http.request":
                 received += len(message.get("body", b""))
                 if received > self.max_bytes:
-                    body_too_large = True
+                    raise _BodyTooLargeError()
             return message
 
-        request._receive = limited_receive  # type: ignore[attr-defined]
-
         try:
-            response = await call_next(request)
-        except Exception:
-            if body_too_large:
-                return Response(status_code=413, content="Request body too large")
-            raise
+            await self.app(scope, limited_receive, send)
+        except _BodyTooLargeError:
+            response = Response(status_code=413, content="Request body too large")
+            await response(scope, receive, send)
 
-        if body_too_large:
-            return Response(status_code=413, content="Request body too large")
-        return response
+
+class _BodyTooLargeError(Exception):
+    """Raised internally when streaming body exceeds the configured limit."""
 
 
 # ---------------------------------------------------------------------------

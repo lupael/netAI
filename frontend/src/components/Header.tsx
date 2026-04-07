@@ -47,7 +47,7 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
 
     // Listen for token written from another tab (cross-tab storage event)
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'netai_token' && e.newValue && !ws) {
+      if (e.key === 'netai_token' && e.newValue && (!ws || ws.readyState === WebSocket.CLOSED)) {
         if (reconnectTimer) clearTimeout(reconnectTimer)
         connect()
       }

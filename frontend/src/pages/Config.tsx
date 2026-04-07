@@ -101,6 +101,9 @@ const Config: React.FC = () => {
       .finally(() => setMapReady(true))
   }, [])
 
+  // fetchConfig receives idMap as an explicit parameter so the callback stays
+  // stable across renders (empty deps array). This avoids a stale-closure
+  // problem where the callback captured an empty idMap on first render.
   const fetchConfig = useCallback(async (hostname: string, idMap: Record<string, string>) => {
     setLoading(true)
     try {

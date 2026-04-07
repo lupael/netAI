@@ -73,9 +73,9 @@ class LimitBodySizeMiddleware(BaseHTTPMiddleware):
             try:
                 parsed = int(content_length)
             except (TypeError, ValueError):
-                return Response(status_code=400, content="Invalid Content-Length header")
+                return Response(status_code=400, content="Content-Length must be a valid number")
             if parsed < 0:
-                return Response(status_code=400, content="Invalid Content-Length header")
+                return Response(status_code=400, content="Content-Length cannot be negative")
             if parsed > self.max_bytes:
                 return Response(status_code=413, content="Request body too large")
         return await call_next(request)
@@ -100,9 +100,18 @@ _RATE_CLEANUP_INTERVAL = 256
 
 
 def _cleanup_rate_windows(now: float) -> None:
-    """Evict stale and excess entries from the rate-limit window dict."""
+    """Evict stale and excess entries from the rate-limit window dict.
+
+    A key is stale when its timestamp list is empty (all entries expired)
+    *and* no request has been seen for at least one full rate-limit window —
+    both checks are needed so we don't prematurely remove a key that was
+    just written but hasn't been seen yet after the last window expiry.
+    """
     stale = [
         key for key, timestamps in list(_rate_windows.items())
+        # Empty list means all timestamps have expired; only remove if the key
+        # has also been idle for at least one window to avoid a race with
+        # concurrent writers that just cleared the list.
         if not timestamps and now - _rate_window_last_seen.get(key, 0.0) >= _RATE_LIMIT_MAX_WINDOW
     ]
     for key in stale:

@@ -1,7 +1,6 @@
-"""Shared slowapi rate-limiter instance."""
-from __future__ import annotations
+"""Rate limiting is implemented by PathRateLimitMiddleware in app.main.
 
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
+No shared slowapi limiter is used; see backend/app/main.py for the
+sliding-window rate-limit middleware applied to /api/nlp/query and
+/api/auth/login.
+"""

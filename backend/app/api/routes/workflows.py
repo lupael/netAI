@@ -131,7 +131,7 @@ _WORKFLOW_RUNS: List[Dict[str, Any]] = [
 
 @router.get("")
 async def get_workflows(skip: int = 0, limit: int = 50) -> Dict[str, Any]:
-    """Return workflow templates and recent run history (paginated)."""
+    """Return paginated workflow templates and full recent run history."""
     templates = _WORKFLOW_TEMPLATES[skip : skip + limit]
     return {"templates": templates, "recent_runs": _WORKFLOW_RUNS}
 

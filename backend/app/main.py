@@ -69,8 +69,15 @@ class LimitBodySizeMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self.max_bytes:
-            return Response(status_code=413, content="Request body too large")
+        if content_length:
+            try:
+                parsed = int(content_length)
+            except (TypeError, ValueError):
+                return Response(status_code=400, content="Invalid Content-Length header")
+            if parsed < 0:
+                return Response(status_code=400, content="Invalid Content-Length header")
+            if parsed > self.max_bytes:
+                return Response(status_code=413, content="Request body too large")
         return await call_next(request)
 
 
@@ -80,28 +87,58 @@ class LimitBodySizeMiddleware(BaseHTTPMiddleware):
 # ---------------------------------------------------------------------------
 
 _rate_windows: dict = _defaultdict(list)
+_rate_window_last_seen: dict = {}
+_rate_lock = asyncio.Lock()
 _RATE_LIMITS = {
     "/api/nlp/query": (30, 60),
     "/api/auth/login": (10, 60),
 }
+_RATE_LIMIT_MAX_KEYS = 10_000
+_RATE_LIMIT_MAX_WINDOW = max(w for _, w in _RATE_LIMITS.values())
+_rate_request_count = 0
+_RATE_CLEANUP_INTERVAL = 256
+
+
+def _cleanup_rate_windows(now: float) -> None:
+    """Evict stale and excess entries from the rate-limit window dict."""
+    stale = [
+        key for key, timestamps in list(_rate_windows.items())
+        if not timestamps and now - _rate_window_last_seen.get(key, 0.0) >= _RATE_LIMIT_MAX_WINDOW
+    ]
+    for key in stale:
+        _rate_windows.pop(key, None)
+        _rate_window_last_seen.pop(key, None)
+
+    overflow = len(_rate_windows) - _RATE_LIMIT_MAX_KEYS
+    if overflow > 0:
+        oldest = sorted(_rate_window_last_seen.items(), key=lambda x: x[1])[:overflow]
+        for key, _ in oldest:
+            _rate_windows.pop(key, None)
+            _rate_window_last_seen.pop(key, None)
 
 
 class PathRateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        global _rate_request_count
         path = request.url.path
         if path in _RATE_LIMITS:
             max_calls, window = _RATE_LIMITS[path]
-            client = (request.client.host if request.client else "unknown")
-            key = f"{client}:{path}"
+            client_ip = (request.client.host if request.client else "unknown")
+            key = f"{client_ip}:{path}"
             now = _time.monotonic()
-            _rate_windows[key] = [t for t in _rate_windows[key] if now - t < window]
-            if len(_rate_windows[key]) >= max_calls:
-                return Response(
-                    status_code=429,
-                    content="Too Many Requests",
-                    headers={"Retry-After": str(window)},
-                )
-            _rate_windows[key].append(now)
+            async with _rate_lock:
+                _rate_request_count += 1
+                if _rate_request_count % _RATE_CLEANUP_INTERVAL == 0:
+                    _cleanup_rate_windows(now)
+                _rate_windows[key] = [t for t in _rate_windows[key] if now - t < window]
+                _rate_window_last_seen[key] = now
+                if len(_rate_windows[key]) >= max_calls:
+                    return Response(
+                        status_code=429,
+                        content="Too Many Requests",
+                        headers={"Retry-After": str(window)},
+                    )
+                _rate_windows[key].append(now)
         return await call_next(request)
 
 
@@ -231,12 +268,20 @@ async def websocket_endpoint(
     websocket: WebSocket,
     token: Optional[str] = Query(default=None),
 ):
-    if token:
-        try:
-            decode_token(token)
-        except Exception:
-            await websocket.close(code=1008)
-            return
+    """WebSocket endpoint for real-time telemetry.
+
+    Requires a valid JWT token via the ``?token=<jwt>`` query parameter.
+    Connections without a token or with an invalid/expired token are rejected
+    with close code 1008 (Policy Violation).
+    """
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        decode_token(token)
+    except Exception:
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket)
     try:
         while True:

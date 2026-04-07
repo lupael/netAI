@@ -17,7 +17,7 @@ const NotFound: React.FC = () => {
         gap: 16,
       }}
     >
-      <span style={{ fontSize: 72, lineHeight: 1 }}>🔍</span>
+      <span style={{ fontSize: 72, lineHeight: 1 }} aria-hidden="true">🔍</span>
       <h1 style={{ fontSize: 48, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
         404
       </h1>

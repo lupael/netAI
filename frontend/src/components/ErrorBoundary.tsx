@@ -44,6 +44,8 @@ class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback
 
+      const isDev = import.meta.env.DEV
+
       return (
         <div
           style={{
@@ -63,20 +65,33 @@ class ErrorBoundary extends Component<Props, State> {
             An unexpected error occurred while rendering this page. You can try
             refreshing or navigating back to the dashboard.
           </p>
-          {this.state.error && (
-            <pre
-              style={{
-                fontSize: 11,
-                background: 'var(--bg-secondary, #1e293b)',
-                color: 'var(--text-muted, #64748b)',
-                padding: '10px 16px',
-                borderRadius: 8,
-                maxWidth: 600,
-                overflow: 'auto',
-              }}
-            >
-              {this.state.error.message}
-            </pre>
+          {isDev && this.state.error && (
+            <details>
+              <summary
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: 'var(--text-muted, #64748b)',
+                  userSelect: 'none',
+                }}
+              >
+                Error details (dev only)
+              </summary>
+              <pre
+                style={{
+                  marginTop: 8,
+                  fontSize: 11,
+                  background: 'var(--bg-secondary, #1e293b)',
+                  color: 'var(--text-muted, #64748b)',
+                  padding: '10px 16px',
+                  borderRadius: 8,
+                  maxWidth: 600,
+                  overflow: 'auto',
+                }}
+              >
+                {this.state.error.message}
+              </pre>
+            </details>
           )}
           <button
             className="btn btn-primary btn-sm"

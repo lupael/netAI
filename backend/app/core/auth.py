@@ -1,6 +1,7 @@
 """JWT authentication utilities using PyJWT."""
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -10,7 +11,16 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "netai-dev-secret-change-in-production")
+_logger = logging.getLogger("netai.auth")
+
+_raw_secret = os.environ.get("JWT_SECRET_KEY", "").strip()
+if not _raw_secret:
+    _raw_secret = "netai-dev-secret-change-in-production"
+    _logger.warning(
+        "JWT_SECRET_KEY is not set — using an insecure default. "
+        "Set JWT_SECRET_KEY in your environment before deploying to production."
+    )
+SECRET_KEY = _raw_secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 

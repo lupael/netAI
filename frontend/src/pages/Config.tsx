@@ -77,6 +77,8 @@ const Config: React.FC = () => {
   // Device list and id-map fetched from the backend
   const [deviceNames, setDeviceNames] = useState<string[]>(Object.keys(MOCK_CONFIGS))
   const [deviceIdMap, setDeviceIdMap] = useState<Record<string, string>>({})
+  // Track whether the device map has finished loading so we don't fire premature API calls
+  const [mapReady, setMapReady] = useState(false)
 
   // Fetch device list and build hostname → id map
   useEffect(() => {
@@ -96,13 +98,14 @@ const Config: React.FC = () => {
         // Fall back to static list derived from MOCK_CONFIGS
         setDeviceNames(Object.keys(MOCK_CONFIGS))
       })
+      .finally(() => setMapReady(true))
   }, [])
 
-  const fetchConfig = useCallback(async (hostname: string) => {
+  const fetchConfig = useCallback(async (hostname: string, idMap: Record<string, string>) => {
     setLoading(true)
     try {
       // Use dynamic id map from API; fall back to hostname directly
-      const deviceId = deviceIdMap[hostname] ?? hostname
+      const deviceId = idMap[hostname] ?? hostname
       const res = await client.get<{ device_id: string; config: string }>(`/api/config/${deviceId}`)
       // Adapt backend { device_id, config } to DeviceConfig shape
       setConfig({
@@ -119,11 +122,17 @@ const Config: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [deviceIdMap])
+  }, [])
 
-  useEffect(() => { void fetchConfig(selectedDevice) }, [selectedDevice, fetchConfig])
+  // Only trigger config fetch once the device-id map is ready to avoid 404s
+  useEffect(() => {
+    if (mapReady) {
+      void fetchConfig(selectedDevice, deviceIdMap)
+    }
+  }, [selectedDevice, mapReady, fetchConfig, deviceIdMap])
 
   const handleAudit = async () => {
+    if (!mapReady) return
     setAuditing(true)
     try {
       const deviceId = deviceIdMap[selectedDevice] ?? selectedDevice
@@ -148,6 +157,7 @@ const Config: React.FC = () => {
   }
 
   const handleApply = async () => {
+    if (!mapReady) return
     setApplying(true)
     try {
       if (config?.config_text) {
@@ -176,11 +186,11 @@ const Config: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p className="card-title" style={{ marginBottom: 0 }}>Device Configuration</p>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => void handleAudit()} disabled={auditing} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => void handleAudit()} disabled={auditing || !mapReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <RefreshCw size={13} className={auditing ? 'spinning' : ''} />
                   {auditing ? 'Auditing…' : 'Audit'}
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={() => void handleApply()} disabled={applying} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => void handleApply()} disabled={applying || !mapReady} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Play size={13} />
                   {applying ? 'Applying…' : 'Apply'}
                 </button>

@@ -14,7 +14,13 @@ const Header: React.FC<HeaderProps> = ({ title, subtitle, alertCount = 0 }) => {
     // Connect to backend WebSocket using relative path to work across environments
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = import.meta.env.VITE_WS_HOST ?? window.location.host
-    const wsUrl = `${protocol}//${host}/ws`
+    // Pass JWT token (stored at login) so the backend can authenticate the WS connection
+    const token = localStorage.getItem('netai_token')
+    if (!token) {
+      // No token — WS will be rejected by the backend; show offline state
+      return
+    }
+    const wsUrl = `${protocol}//${host}/ws?token=${encodeURIComponent(token)}`
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false

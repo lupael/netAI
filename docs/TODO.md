@@ -154,8 +154,8 @@ Priority levels: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low
   - Implemented as `VITE_API_URL` in `frontend/src/api/client.ts`
 
 - [x] **SECURITY-001** — Add rate limiting to NLP and auth endpoints
-  - Package: `slowapi` (FastAPI wrapper for `limits`)
-  - Limit: 30 req/min per IP on `/api/nlp/query`
+  - Implementation: custom in-memory `PathRateLimitMiddleware` in `backend/app/main.py`
+  - Limit: 30 req/min per IP on `/api/nlp/query`, 10 req/min per IP on `/api/auth/login`
 
 - [x] **SECURITY-002** — Add request size limit to prevent DoS via large payloads
   - FastAPI `Request` body size limit middleware
